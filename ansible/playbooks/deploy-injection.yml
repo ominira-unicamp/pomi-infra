@@ -1,0 +1,4 @@
+---
+- import_playbook: deploy-pomi-component.yml
+  vars:
+    pomi_component_name: injection

@@ -1,0 +1,2 @@
+---
+pomi_stop_compose_source: "{{ pomi_infra_root }}/slices/pomi/compose/compose.yaml"

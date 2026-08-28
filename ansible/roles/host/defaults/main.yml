@@ -1,0 +1,9 @@
+---
+pomi_host_packages:
+  - ca-certificates
+  - curl
+  - docker.io
+  - docker-compose-v2
+  - sqlite3
+pomi_swapfile_path: /swapfile
+pomi_swapfile_size: 2G

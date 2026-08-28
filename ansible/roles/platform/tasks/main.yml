@@ -1,0 +1,28 @@
+---
+- name: Validar a raiz do repositório de infraestrutura
+  ansible.builtin.assert:
+    that:
+      - pomi_infra_root is defined
+      - pomi_infra_root | length > 0
+    fail_msg: Informe pomi_infra_root com o caminho local do checkout pomi-infra.
+
+- name: Instalar a configuração raiz do Caddy
+  ansible.builtin.copy:
+    src: "{{ pomi_platform_caddyfile_source }}"
+    dest: "{{ pomi_root }}/caddy/Caddyfile"
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Reconciliar Caddy
+
+- name: Instalar a composição da plataforma
+  ansible.builtin.copy:
+    src: "{{ pomi_platform_compose_source }}"
+    dest: "{{ pomi_compose_dir }}/platform.yaml"
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Reconciliar Caddy
+
+- name: Aplicar a plataforma imediatamente na primeira execução
+  ansible.builtin.meta: flush_handlers

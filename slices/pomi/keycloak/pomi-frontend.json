@@ -1,0 +1,31 @@
+{
+  "clientId": "pomi-frontend",
+  "name": "POMI Frontend",
+  "enabled": true,
+  "protocol": "openid-connect",
+  "rootUrl": "http://localhost:5174",
+  "baseUrl": "http://localhost:5174",
+  "publicClient": true,
+  "standardFlowEnabled": true,
+  "directAccessGrantsEnabled": false,
+  "serviceAccountsEnabled": false,
+  "redirectUris": ["https://pomi-lime.vercel.app/*", "http://localhost:5174/*"],
+  "webOrigins": ["https://pomi-lime.vercel.app", "http://localhost:5174"],
+  "attributes": {
+    "pkce.code.challenge.method": "S256"
+  },
+  "protocolMappers": [
+    {
+      "name": "pomi-api-audience",
+      "protocol": "openid-connect",
+      "protocolMapper": "oidc-audience-mapper",
+      "consentRequired": false,
+      "config": {
+        "included.client.audience": "pomi-api",
+        "access.token.claim": "true",
+        "id.token.claim": "false",
+        "lightweight.claim": "false"
+      }
+    }
+  ]
+}

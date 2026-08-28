@@ -1,0 +1,88 @@
+---
+- name: Validar as entradas do deploy do Exchange
+  ansible.builtin.assert:
+    that:
+      - pomi_infra_root is defined
+      - exchange_image_ref is defined
+      - exchange_registry_host is defined
+      - exchange_registry_password is defined
+      - exchange_api_hostname is defined
+      - exchange_backend_env is defined
+    fail_msg: O deploy requer imagem, credencial temporária ECR, hostname e ambiente já renderizado.
+
+- name: Instalar o ambiente da API do Exchange
+  ansible.builtin.copy:
+    content: "{{ exchange_backend_env }}\n"
+    dest: "{{ pomi_root }}/exchange/backend.env"
+    owner: root
+    group: root
+    mode: "0600"
+  no_log: true
+
+- name: Instalar a configuração do OpenTelemetry Collector
+  ansible.builtin.copy:
+    src: "{{ exchange_otel_config_source }}"
+    dest: "{{ pomi_root }}/otel-collector-config.yaml"
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Instalar o virtual host do Exchange
+  ansible.builtin.copy:
+    content: |
+      {{ exchange_api_hostname }} {
+          encode zstd gzip
+          reverse_proxy pomi-exchange-backend:3000
+      }
+    dest: "{{ pomi_caddy_site_dir }}/exchange.caddy"
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Reconciliar Caddy
+
+- name: Instalar a composição do Exchange
+  ansible.builtin.copy:
+    src: "{{ exchange_compose_source }}"
+    dest: "{{ pomi_compose_dir }}/exchange.yaml"
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Remover os contêineres legados do Exchange
+  ansible.builtin.include_tasks: legacy-container.yml
+  loop:
+    - pomi-exchange-backend
+    - pomi-otel-collector
+  loop_control:
+    loop_var: exchange_legacy_container
+
+- name: Atualizar o Exchange com credencial temporária do ECR
+  block:
+    - name: Autenticar temporariamente o Docker no ECR do Exchange
+      community.docker.docker_login:
+        registry_url: "{{ exchange_registry_host }}"
+        username: AWS
+        password: "{{ exchange_registry_password }}"
+        reauthorize: true
+      no_log: true
+
+    - name: Baixar a imagem imutável da API do Exchange
+      community.docker.docker_image_pull:
+        name: "{{ exchange_image_ref }}"
+
+    - name: Subir o Exchange pelo Compose
+      community.docker.docker_compose_v2:
+        project_src: "{{ pomi_compose_dir }}"
+        files:
+          - exchange.yaml
+        state: present
+        wait: true
+        wait_timeout: 120
+      environment:
+        EXCHANGE_IMAGE: "{{ exchange_image_ref }}"
+  always:
+    - name: Remover a credencial temporária do ECR do Exchange
+      community.docker.docker_login:
+        registry_url: "{{ exchange_registry_host }}"
+        state: absent
+      no_log: true

@@ -1,0 +1,54 @@
+FROM node:25-alpine AS scraper-builder
+
+WORKDIR /workspace/scrapper-aulas
+
+COPY --from=scrapper /package.json ./package.json
+COPY --from=scrapper /unicamp-scrapper-lib/package.json ./unicamp-scrapper-lib/package.json
+COPY --from=scrapper /unicamp-scrapper-cli/package.json ./unicamp-scrapper-cli/package.json
+
+RUN npm install
+
+COPY --from=scrapper /unicamp-scrapper-lib/tsconfig.json ./unicamp-scrapper-lib/tsconfig.json
+COPY --from=scrapper /unicamp-scrapper-lib/tsconfig.build.json ./unicamp-scrapper-lib/tsconfig.build.json
+COPY --from=scrapper /unicamp-scrapper-lib/src ./unicamp-scrapper-lib/src
+COPY --from=scrapper /unicamp-scrapper-cli/tsconfig.json ./unicamp-scrapper-cli/tsconfig.json
+COPY --from=scrapper /unicamp-scrapper-cli/tsconfig.build.json ./unicamp-scrapper-cli/tsconfig.build.json
+COPY --from=scrapper /unicamp-scrapper-cli/src ./unicamp-scrapper-cli/src
+
+RUN npm run build
+RUN npm prune --omit=dev --ignore-scripts
+
+FROM node:25-alpine AS backend-builder
+
+ENV DATABASE_URL="postgresql://placeholder:placeholder@placeholder:5432/placeholder"
+WORKDIR /usr/src/app
+
+COPY package.json package-lock.json ./
+COPY packages/db/package.json packages/db/package.json
+COPY packages/api-core/package.json packages/api-core/package.json
+COPY packages/data/package.json packages/data/package.json
+COPY packages/app/package.json packages/app/package.json
+COPY packages/injection/package.json packages/injection/package.json
+
+RUN npm ci
+
+COPY . ./
+
+RUN npm run prisma:generate
+RUN npm run build --workspace @pomi/db
+RUN npm run build --workspace @pomi/injection
+
+FROM backend-builder AS runtime
+
+RUN npm prune --omit=dev --ignore-scripts
+
+COPY --from=scraper-builder /workspace/scrapper-aulas/package.json /usr/src/app/scrapper-aulas/package.json
+COPY --from=scraper-builder /workspace/scrapper-aulas/node_modules /usr/src/app/scrapper-aulas/node_modules
+COPY --from=scraper-builder /workspace/scrapper-aulas/unicamp-scrapper-lib/package.json /usr/src/app/scrapper-aulas/unicamp-scrapper-lib/package.json
+COPY --from=scraper-builder /workspace/scrapper-aulas/unicamp-scrapper-lib/dist /usr/src/app/scrapper-aulas/unicamp-scrapper-lib/dist
+COPY --from=scraper-builder /workspace/scrapper-aulas/unicamp-scrapper-cli/package.json /usr/src/app/scrapper-aulas/unicamp-scrapper-cli/package.json
+COPY --from=scraper-builder /workspace/scrapper-aulas/unicamp-scrapper-cli/dist /usr/src/app/scrapper-aulas/unicamp-scrapper-cli/dist
+
+WORKDIR /usr/src/app
+
+CMD ["node", "packages/injection/dist/cli.js", "watch", "--config", "/opt/pomi/injection/injections.json"]

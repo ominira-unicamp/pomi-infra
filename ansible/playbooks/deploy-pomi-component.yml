@@ -1,0 +1,333 @@
+---
+- name: Construir e publicar um componente do POMI
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars:
+    pomi_image_tag: "{{ lookup('ansible.builtin.pipe', 'date -u +%Y%m%d%H%M%S') }}"
+    pomi_use_existing_image: false
+    pomi_components:
+      data:
+        target: data
+        image_repository: pomi_backend_repository_url
+        image_suffix: data
+        service: data-api
+        env_name: data
+      app:
+        target: app
+        image_repository: pomi_backend_repository_url
+        image_suffix: app
+        service: app-api
+        env_name: app
+      injection:
+        target: injection
+        image_repository: pomi_injection_repository_url
+        image_suffix: injection
+        service: injection
+        env_name: injection
+    pomi_component: "{{ pomi_component_name }}"
+  tasks:
+    - name: Validar o componente solicitado
+      ansible.builtin.assert:
+        that:
+          - pomi_component in pomi_components
+        fail_msg: "Componente inválido: {{ pomi_component }}. Use data, app ou injection."
+
+    - name: Definir arquivos necessários
+      ansible.builtin.set_fact:
+        pomi_required_files: >-
+          {{ [pomi_backend_dir + '/Dockerfile'] +
+             ([pomi_scrapper_dir + '/package.json', pomi_injection_dockerfile]
+              if pomi_component == 'injection' else []) }}
+
+    - name: Verificar os arquivos necessários
+      ansible.builtin.stat:
+        path: "{{ item }}"
+      loop: "{{ pomi_required_files }}"
+      register: pomi_component_files
+
+    - name: Exigir os arquivos necessários
+      ansible.builtin.assert:
+        that: item.stat.exists
+        fail_msg: "Arquivo necessário não encontrado: {{ item.item }}"
+      loop: "{{ pomi_component_files.results }}"
+
+    - name: Ler outputs do OpenTofu
+      ansible.builtin.command:
+        argv:
+          - tofu
+          - "-chdir={{ pomi_infra_root }}/terraform"
+          - output
+          - -raw
+          - "{{ item }}"
+      changed_when: false
+      loop:
+        - aws_region
+        - pomi_backend_repository_url
+        - pomi_injection_repository_url
+        - pomi_data_api_hostname
+        - pomi_app_api_hostname
+        - pomi_keycloak_url
+        - pomi_keycloak_hostname
+        - pomi_frontend_url
+        - pomi_postgres_password_parameter_name
+        - pomi_data_admin_token_parameter_name
+        - exchange_openobserve_auth_parameter_name
+        - exchange_openobserve_url
+        - exchange_log_level
+      register: pomi_tofu_outputs
+
+    - name: Consolidar outputs do OpenTofu
+      ansible.builtin.set_fact:
+        pomi_outputs: "{{ dict(pomi_tofu_outputs.results | map(attribute='item') | zip(pomi_tofu_outputs.results | map(attribute='stdout'))) }}"
+
+    - name: Ler segredos do Parameter Store
+      ansible.builtin.command:
+        argv:
+          - aws
+          - ssm
+          - get-parameter
+          - --name
+          - "{{ item }}"
+          - --with-decryption
+          - --query
+          - Parameter.Value
+          - --output
+          - text
+          - --region
+          - "{{ pomi_outputs.aws_region }}"
+      changed_when: false
+      loop:
+        - "{{ pomi_outputs.pomi_postgres_password_parameter_name }}"
+        - "{{ pomi_outputs.pomi_data_admin_token_parameter_name }}"
+        - "{{ pomi_outputs.exchange_openobserve_auth_parameter_name }}"
+      register: pomi_parameters
+      no_log: true
+
+    - name: Consolidar ambiente do componente
+      ansible.builtin.set_fact:
+        pomi_component: "{{ pomi_component }}"
+        pomi_component_config: "{{ pomi_components[pomi_component] }}"
+        pomi_postgres_password: "{{ pomi_parameters.results[0].stdout }}"
+        pomi_data_admin_token: "{{ pomi_parameters.results[1].stdout }}"
+        pomi_openobserve_auth: "{{ pomi_parameters.results[2].stdout }}"
+        pomi_service_image_ref: "{{ pomi_outputs[pomi_components[pomi_component].image_repository] }}:{{ pomi_image_tag }}-{{ pomi_components[pomi_component].image_suffix }}"
+        pomi_migration_image_ref: "{{ pomi_outputs.pomi_backend_repository_url }}:{{ pomi_image_tag }}-{{ 'migrate' if pomi_use_existing_image else 'migration-check' }}"
+        pomi_registry_host: "{{ pomi_outputs.pomi_backend_repository_url.split('/')[0] }}"
+        pomi_service_env: |
+          {% if pomi_component == 'data' %}
+          NODE_ENV=production
+          NODE_OPTIONS=--max-old-space-size=160
+          PORT=3000
+          DATABASE_URL=postgresql://pomi:{{ pomi_parameters.results[0].stdout }}@postgres:5432/pomi?schema=public
+          CORS_ORIGIN={{ pomi_outputs.pomi_frontend_url }},http://localhost:5174
+          POMI_DATA_ADMIN_TOKEN={{ pomi_parameters.results[1].stdout }}
+          {% elif pomi_component == 'app' %}
+          NODE_ENV=production
+          NODE_OPTIONS=--max-old-space-size=160
+          PORT=3001
+          DATABASE_URL=postgresql://pomi:{{ pomi_parameters.results[0].stdout }}@postgres:5432/pomi?schema=public
+          CORS_ORIGIN={{ pomi_outputs.pomi_frontend_url }},http://localhost:5174
+          DISABLED_AUTH=false
+          KEYCLOAK_ISSUER={{ pomi_outputs.pomi_keycloak_url }}/realms/pomi
+          KEYCLOAK_AUDIENCE=pomi-api
+          {% else %}
+          NODE_ENV=production
+          NODE_OPTIONS=--max-old-space-size=448
+          DATABASE_URL=postgresql://pomi:{{ pomi_parameters.results[0].stdout }}@postgres:5432/pomi?schema=public
+          LOG_LEVEL={{ pomi_outputs.exchange_log_level }}
+          OPENOBSERVE_URL={{ pomi_outputs.exchange_openobserve_url }}
+          OPENOBSERVE_AUTH={{ pomi_parameters.results[2].stdout }}
+          OPENOBSERVE_STREAM=pomi-injection-logs
+          {% endif %}
+      no_log: true
+
+    - name: Obter credencial temporária do ECR
+      ansible.builtin.command:
+        argv:
+          - aws
+          - ecr
+          - get-login-password
+          - --region
+          - "{{ pomi_outputs.aws_region }}"
+      changed_when: false
+      register: pomi_ecr_password
+      no_log: true
+
+    - name: Publicar imagens do componente
+      when: not (pomi_use_existing_image | bool)
+      block:
+        - name: Autenticar Docker local no ECR
+          ansible.builtin.command:
+            argv:
+              - docker
+              - login
+              - --username
+              - AWS
+              - --password-stdin
+              - "{{ pomi_registry_host }}"
+            stdin: "{{ pomi_ecr_password.stdout }}"
+          changed_when: true
+          no_log: true
+
+        - name: Construir imagem do componente
+          ansible.builtin.command:
+            argv:
+              - docker
+              - build
+              - --file
+              - "{{ pomi_injection_dockerfile if pomi_component == 'injection' else pomi_backend_dir + '/Dockerfile' }}"
+              - "{{ '--build-context' if pomi_component == 'injection' else '--target' }}"
+              - "{{ 'scrapper=' + pomi_scrapper_dir if pomi_component == 'injection' else pomi_components[pomi_component].target }}"
+              - --tag
+              - "{{ pomi_service_image_ref }}"
+              - "{{ pomi_backend_dir }}"
+          changed_when: true
+
+        - name: Construir imagem candidata de migration
+          ansible.builtin.command:
+            argv:
+              - docker
+              - build
+              - --file
+              - "{{ pomi_backend_dir }}/Dockerfile"
+              - --target
+              - migrate
+              - --tag
+              - "{{ pomi_migration_image_ref }}"
+              - "{{ pomi_backend_dir }}"
+          changed_when: true
+
+        - name: Publicar imagem do componente
+          ansible.builtin.command:
+            argv:
+              - docker
+              - push
+              - "{{ pomi_service_image_ref }}"
+          changed_when: true
+
+        - name: Publicar imagem candidata de migration
+          ansible.builtin.command:
+            argv:
+              - docker
+              - push
+              - "{{ pomi_migration_image_ref }}"
+          changed_when: true
+      always:
+        - name: Encerrar sessão local do ECR
+          ansible.builtin.command:
+            argv:
+              - docker
+              - logout
+              - "{{ pomi_registry_host }}"
+          changed_when: false
+          no_log: true
+
+- name: Verificar migrations e aplicar o componente do POMI
+  hosts: lightsail
+  become: true
+  gather_facts: false
+  vars:
+    pomi_component: "{{ hostvars['localhost'].pomi_component }}"
+    pomi_service_name: "{{ hostvars['localhost'].pomi_component_config.service }}"
+    pomi_service_image_ref: "{{ hostvars['localhost'].pomi_service_image_ref }}"
+    pomi_migration_image_ref: "{{ hostvars['localhost'].pomi_migration_image_ref }}"
+    pomi_service_env: "{{ hostvars['localhost'].pomi_service_env }}"
+    pomi_registry_host: "{{ hostvars['localhost'].pomi_registry_host }}"
+    pomi_registry_password: "{{ hostvars['localhost'].pomi_ecr_password.stdout }}"
+    pomi_image_env_file: "{{ pomi_root }}/planner-test/images.env"
+    pomi_env_file: "{{ pomi_root }}/planner-test/{{ hostvars['localhost'].pomi_component_config.env_name }}.env"
+    pomi_image_variable: "POMI_{{ 'DATA' if pomi_component == 'data' else 'APP' if pomi_component == 'app' else 'INJECTION' }}_IMAGE"
+  tasks:
+    - name: Autenticar temporariamente o Docker remoto no ECR
+      community.docker.docker_login:
+        registry_url: "{{ pomi_registry_host }}"
+        username: AWS
+        password: "{{ pomi_registry_password }}"
+        reauthorize: true
+      no_log: true
+
+    - name: Baixar a imagem do componente
+      community.docker.docker_image_pull:
+        name: "{{ pomi_service_image_ref }}"
+
+    - name: Baixar a imagem candidata de migration
+      community.docker.docker_image_pull:
+        name: "{{ pomi_migration_image_ref }}"
+
+    - name: Verificar migrations pendentes
+      ansible.builtin.command:
+        argv:
+          - docker
+          - run
+          - --rm
+          - --network
+          - pomi-test-internal
+          - --env-file
+          - "{{ pomi_root }}/planner-test/data.env"
+          - "{{ pomi_migration_image_ref }}"
+          - npm
+          - run
+          - prisma:status
+      changed_when: false
+      register: pomi_migration_status
+      failed_when: pomi_migration_status.rc != 0
+
+    - name: Atualizar o ambiente do componente
+      ansible.builtin.copy:
+        content: "{{ pomi_service_env | trim }}\n"
+        dest: "{{ pomi_env_file }}"
+        owner: root
+        group: root
+        mode: "0600"
+      no_log: true
+
+    - name: Ler as referências de imagem atualmente ativas
+      ansible.builtin.slurp:
+        src: "{{ pomi_image_env_file }}"
+      register: pomi_existing_image_env
+      failed_when: false
+
+    - name: Consolidar referências para o Compose
+      ansible.builtin.set_fact:
+        pomi_existing_images_env: "{{ (pomi_existing_image_env.content | default('') | b64decode) if pomi_existing_image_env.content is defined else '' }}"
+        pomi_compose_data_image: "{{ pomi_service_image_ref if pomi_component == 'data' else ((pomi_existing_image_env.content | default('') | b64decode) | regex_search('(?m)^POMI_DATA_IMAGE=(.+)$', '\\1') | default('pomi-data-test:latest', true)) }}"
+        pomi_compose_app_image: "{{ pomi_service_image_ref if pomi_component == 'app' else ((pomi_existing_image_env.content | default('') | b64decode) | regex_search('(?m)^POMI_APP_IMAGE=(.+)$', '\\1') | default('pomi-app-test:latest', true)) }}"
+        pomi_compose_injection_image: "{{ pomi_service_image_ref if pomi_component == 'injection' else ((pomi_existing_image_env.content | default('') | b64decode) | regex_search('(?m)^POMI_INJECTION_IMAGE=(.+)$', '\\1') | default('pomi-injection-test:latest', true)) }}"
+        pomi_compose_migrate_image: "{{ (pomi_existing_image_env.content | default('') | b64decode) | regex_search('(?m)^POMI_MIGRATE_IMAGE=(.+)$', '\\1') | default('pomi-migrate-test:latest', true) }}"
+
+    - name: Atualizar a referência persistida da imagem
+      ansible.builtin.lineinfile:
+        path: "{{ pomi_image_env_file }}"
+        regexp: "^{{ pomi_image_variable }}="
+        line: "{{ pomi_image_variable }}={{ pomi_service_image_ref }}"
+        create: true
+        owner: root
+        group: root
+        mode: "0640"
+
+    - name: Aplicar somente o serviço solicitado
+      ansible.builtin.command:
+        argv:
+          - docker
+          - compose
+          - --file
+          - "{{ pomi_compose_dir }}/pomi.yaml"
+          - --profile
+          - api
+          - up
+          - --detach
+          - --no-deps
+          - --wait
+          - "{{ pomi_service_name }}"
+      environment:
+        POMI_DATA_IMAGE: "{{ pomi_compose_data_image }}"
+        POMI_APP_IMAGE: "{{ pomi_compose_app_image }}"
+        POMI_MIGRATE_IMAGE: "{{ pomi_compose_migrate_image }}"
+        POMI_INJECTION_IMAGE: "{{ pomi_compose_injection_image }}"
+      changed_when: true
+    - name: Remover a credencial temporária do ECR remoto
+      community.docker.docker_login:
+        registry_url: "{{ pomi_registry_host }}"
+        state: absent
+      no_log: true

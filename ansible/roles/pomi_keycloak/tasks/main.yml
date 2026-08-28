@@ -1,0 +1,180 @@
+---
+- name: Validar o deploy do Keycloak do POMI
+  ansible.builtin.assert:
+    that:
+      - pomi_keycloak_config_source is directory
+      - pomi_keycloak_theme_source is directory
+      - pomi_keycloak_env is defined
+      - pomi_postgres_env is defined
+      - pomi_keycloak_hostname is defined
+      - pomi_frontend_url is defined
+      - pomi_data_api_hostname is defined
+      - pomi_app_api_hostname is defined
+
+- name: Criar os diretórios do Keycloak do POMI
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  loop:
+    - "{{ pomi_root }}/planner-test"
+    - "{{ pomi_root }}/keycloak-config"
+    - "{{ pomi_root }}/keycloak-theme"
+
+- name: Instalar o ambiente do PostgreSQL do POMI
+  ansible.builtin.copy:
+    content: "{{ pomi_postgres_env | trim }}\n"
+    dest: "{{ pomi_root }}/planner-test/postgres.env"
+    owner: root
+    group: root
+    mode: "0600"
+  no_log: true
+
+- name: Instalar o ambiente do Keycloak do POMI
+  ansible.builtin.copy:
+    content: "{{ pomi_keycloak_env | trim }}\n"
+    dest: "{{ pomi_root }}/planner-test/keycloak.env"
+    owner: root
+    group: root
+    mode: "0600"
+  no_log: true
+
+- name: Instalar a configuração declarativa do Keycloak
+  ansible.builtin.copy:
+    src: "{{ pomi_keycloak_config_source }}"
+    dest: "{{ pomi_root }}/keycloak-config/"
+    owner: root
+    group: root
+    mode: preserve
+
+- name: Instalar o tema do Keycloak
+  ansible.builtin.copy:
+    src: "{{ pomi_keycloak_theme_source }}"
+    dest: "{{ pomi_root }}/keycloak-theme/pomi/"
+    owner: root
+    group: root
+    mode: preserve
+
+- name: Configurar os redirecionamentos do frontend no Keycloak
+  ansible.builtin.replace:
+    path: "{{ pomi_root }}/keycloak-config/pomi-frontend.json"
+    regexp: '"redirectUris": \[[^]]*\]'
+    replace: '"redirectUris": ["{{ pomi_frontend_url }}/*", "http://localhost:5174/*"]'
+
+- name: Configurar as origens do frontend no Keycloak
+  ansible.builtin.replace:
+    path: "{{ pomi_root }}/keycloak-config/pomi-frontend.json"
+    regexp: '"webOrigins": \[[^]]*\]'
+    replace: '"webOrigins": ["{{ pomi_frontend_url }}", "http://localhost:5174"]'
+
+- name: Configurar a URL raiz do cliente Keycloak
+  ansible.builtin.replace:
+    path: "{{ pomi_root }}/keycloak-config/pomi-frontend.json"
+    regexp: '"rootUrl": "[^"]*"'
+    replace: '"rootUrl": "{{ pomi_frontend_url }}"'
+
+- name: Configurar a URL de retorno do cliente Keycloak
+  ansible.builtin.replace:
+    path: "{{ pomi_root }}/keycloak-config/pomi-frontend.json"
+    regexp: '"baseUrl": "[^"]*"'
+    replace: '"baseUrl": "{{ pomi_frontend_url }}"'
+
+- name: Instalar o virtual host do Keycloak do POMI
+  ansible.builtin.copy:
+    content: |
+      {{ pomi_data_api_hostname }} {
+          encode zstd gzip
+          reverse_proxy pomi-data-api-test:3000
+      }
+
+      {{ pomi_app_api_hostname }} {
+          encode zstd gzip
+          reverse_proxy pomi-app-api-test:3001
+      }
+
+      {{ pomi_keycloak_hostname }} {
+          encode zstd gzip
+          reverse_proxy pomi-keycloak-test:8080
+      }
+    dest: "{{ pomi_caddy_site_dir }}/pomi.caddy"
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Reconciliar Caddy
+
+- name: Instalar a composição do POMI
+  ansible.builtin.copy:
+    src: "{{ pomi_keycloak_compose_source }}"
+    dest: "{{ pomi_compose_dir }}/pomi.yaml"
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Baixar a imagem do Keycloak
+  community.docker.docker_image_pull:
+    name: "{{ pomi_keycloak_image }}"
+
+- name: Aguardar o banco de dados do Keycloak
+  ansible.builtin.command:
+    argv:
+      - docker
+      - compose
+      - --file
+      - "{{ pomi_compose_dir }}/pomi.yaml"
+      - up
+      - --detach
+      - --wait
+      - postgres
+  environment:
+    KEYCLOAK_IMAGE: "{{ pomi_keycloak_image }}"
+  changed_when: true
+
+- name: Aplicar o schema do Keycloak
+  ansible.builtin.command:
+    argv:
+      - docker
+      - compose
+      - --file
+      - "{{ pomi_compose_dir }}/pomi.yaml"
+      - run
+      - --rm
+      - keycloak-schema
+  environment:
+    KEYCLOAK_IMAGE: "{{ pomi_keycloak_image }}"
+  changed_when: true
+
+- name: Recriar o Keycloak com o tema atualizado
+  ansible.builtin.command:
+    argv:
+      - docker
+      - compose
+      - --file
+      - "{{ pomi_compose_dir }}/pomi.yaml"
+      - up
+      - --detach
+      - --no-deps
+      - --force-recreate
+      - --wait
+      - keycloak
+  environment:
+    KEYCLOAK_IMAGE: "{{ pomi_keycloak_image }}"
+  changed_when: true
+
+- name: Reaplicar a configuração declarativa do Keycloak
+  ansible.builtin.command:
+    argv:
+      - docker
+      - compose
+      - --file
+      - "{{ pomi_compose_dir }}/pomi.yaml"
+      - run
+      - --rm
+      - keycloak-config
+  environment:
+    KEYCLOAK_IMAGE: "{{ pomi_keycloak_image }}"
+  changed_when: true
+
+- name: Reconciliar o Caddy antes das validações públicas
+  ansible.builtin.meta: flush_handlers

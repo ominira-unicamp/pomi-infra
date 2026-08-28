@@ -1,0 +1,138 @@
+---
+- name: Construir e publicar a imagem de migration do POMI
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars:
+    pomi_image_tag: "{{ lookup('ansible.builtin.pipe', 'date -u +%Y%m%d%H%M%S') }}"
+  tasks:
+    - name: Ler outputs necessários do OpenTofu
+      ansible.builtin.command:
+        argv:
+          - tofu
+          - "-chdir={{ pomi_infra_root }}/terraform"
+          - output
+          - -raw
+          - "{{ item }}"
+      changed_when: false
+      loop:
+        - aws_region
+        - pomi_backend_repository_url
+      register: pomi_tofu_outputs
+
+    - name: Consolidar outputs
+      ansible.builtin.set_fact:
+        pomi_outputs: "{{ dict(pomi_tofu_outputs.results | map(attribute='item') | zip(pomi_tofu_outputs.results | map(attribute='stdout'))) }}"
+
+    - name: Definir referências da imagem de migration
+      ansible.builtin.set_fact:
+        pomi_migration_image_ref: "{{ pomi_outputs.pomi_backend_repository_url }}:{{ pomi_image_tag }}-migration"
+        pomi_registry_host: "{{ pomi_outputs.pomi_backend_repository_url.split('/')[0] }}"
+
+    - name: Obter credencial temporária do ECR
+      ansible.builtin.command:
+        argv:
+          - aws
+          - ecr
+          - get-login-password
+          - --region
+          - "{{ pomi_outputs.aws_region }}"
+      changed_when: false
+      register: pomi_ecr_password
+      no_log: true
+
+    - name: Construir e publicar a imagem de migration
+      block:
+        - name: Autenticar Docker local no ECR
+          ansible.builtin.command:
+            argv:
+              - docker
+              - login
+              - --username
+              - AWS
+              - --password-stdin
+              - "{{ pomi_registry_host }}"
+            stdin: "{{ pomi_ecr_password.stdout }}"
+          changed_when: true
+          no_log: true
+
+        - name: Construir a imagem de migration
+          ansible.builtin.command:
+            argv:
+              - docker
+              - build
+              - --file
+              - "{{ pomi_backend_dir }}/Dockerfile"
+              - --target
+              - migrate
+              - --tag
+              - "{{ pomi_migration_image_ref }}"
+              - "{{ pomi_backend_dir }}"
+          changed_when: true
+
+        - name: Publicar a imagem de migration
+          ansible.builtin.command:
+            argv:
+              - docker
+              - push
+              - "{{ pomi_migration_image_ref }}"
+          changed_when: true
+      always:
+        - name: Encerrar sessão local do ECR
+          ansible.builtin.command:
+            argv:
+              - docker
+              - logout
+              - "{{ pomi_registry_host }}"
+          changed_when: false
+          no_log: true
+
+- name: Aplicar migrations do POMI
+  hosts: lightsail
+  become: true
+  gather_facts: false
+  vars:
+    pomi_migration_image_ref: "{{ hostvars['localhost'].pomi_migration_image_ref }}"
+    pomi_registry_host: "{{ hostvars['localhost'].pomi_registry_host }}"
+    pomi_registry_password: "{{ hostvars['localhost'].pomi_ecr_password.stdout }}"
+    pomi_image_env_file: "{{ pomi_root }}/planner-test/images.env"
+  tasks:
+    - name: Autenticar temporariamente o Docker remoto no ECR
+      community.docker.docker_login:
+        registry_url: "{{ pomi_registry_host }}"
+        username: AWS
+        password: "{{ pomi_registry_password }}"
+        reauthorize: true
+      no_log: true
+
+    - name: Baixar a imagem de migration
+      community.docker.docker_image_pull:
+        name: "{{ pomi_migration_image_ref }}"
+
+    - name: Aplicar migrations
+      ansible.builtin.command:
+        argv:
+          - docker
+          - run
+          - --rm
+          - --network
+          - pomi-test-internal
+          - --env-file
+          - "{{ pomi_root }}/planner-test/data.env"
+          - "{{ pomi_migration_image_ref }}"
+      changed_when: true
+
+    - name: Atualizar a referência ativa de migration
+      ansible.builtin.lineinfile:
+        path: "{{ pomi_image_env_file }}"
+        regexp: "^POMI_MIGRATE_IMAGE="
+        line: "POMI_MIGRATE_IMAGE={{ pomi_migration_image_ref }}"
+        create: true
+        owner: root
+        group: root
+        mode: "0640"
+    - name: Remover a credencial temporária do ECR remoto
+      community.docker.docker_login:
+        registry_url: "{{ pomi_registry_host }}"
+        state: absent
+      no_log: true

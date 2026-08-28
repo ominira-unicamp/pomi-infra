@@ -1,0 +1,22 @@
+name: pomi-platform
+
+services:
+  caddy:
+    image: caddy:2-alpine
+    container_name: pomi-caddy
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - /opt/pomi/caddy:/etc/caddy:ro
+      - /opt/pomi/caddy-data:/data
+      - /opt/pomi/caddy-config:/config
+    networks:
+      - edge
+
+networks:
+  edge:
+    external: true
+    name: pomi-edge

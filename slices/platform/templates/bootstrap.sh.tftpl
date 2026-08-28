@@ -1,0 +1,21 @@
+#!/usr/bin/env bash
+
+set -eu
+
+export DEBIAN_FRONTEND=noninteractive
+
+apt-get update
+apt-get install --yes ca-certificates curl docker.io docker-compose-v2
+systemctl enable --now docker
+
+install -d -m 0750 -o ubuntu -g ubuntu /opt/pomi
+install -d -m 0750 -o 1000 -g 1000 /opt/pomi/data
+install -d -m 0750 -o root -g root /opt/pomi/caddy-data
+install -d -m 0750 -o root -g root /opt/pomi/caddy-config
+
+docker network inspect pomi-edge >/dev/null 2>&1 || docker network create pomi-edge
+docker network inspect pomi-test-internal >/dev/null 2>&1 || docker network create --internal pomi-test-internal
+docker pull caddy:2-alpine
+docker pull otel/opentelemetry-collector-contrib:0.123.0
+
+touch /var/lib/pomi-bootstrap-complete

@@ -1,0 +1,11 @@
+{
+  "clientId": "pomi-api",
+  "name": "POMI API",
+  "enabled": true,
+  "protocol": "openid-connect",
+  "bearerOnly": true,
+  "publicClient": false,
+  "standardFlowEnabled": false,
+  "directAccessGrantsEnabled": false,
+  "serviceAccountsEnabled": false
+}

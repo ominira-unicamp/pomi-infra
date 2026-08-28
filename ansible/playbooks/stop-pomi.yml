@@ -1,0 +1,117 @@
+---
+- name: Preparar backup do POMI
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  tasks:
+    - name: Ler outputs necessários do OpenTofu
+      ansible.builtin.command:
+        argv:
+          - tofu
+          - "-chdir={{ pomi_infra_root }}/terraform"
+          - output
+          - -raw
+          - "{{ item }}"
+      changed_when: false
+      loop:
+        - pomi_backup_bucket
+        - pomi_data_api_hostname
+        - pomi_app_api_hostname
+        - pomi_keycloak_hostname
+      register: pomi_stop_outputs_raw
+
+    - name: Consolidar outputs da parada
+      ansible.builtin.set_fact:
+        pomi_stop_outputs: "{{ dict(pomi_stop_outputs_raw.results | map(attribute='item') | zip(pomi_stop_outputs_raw.results | map(attribute='stdout'))) }}"
+
+    - name: Criar diretório local temporário para o backup
+      ansible.builtin.tempfile:
+        state: directory
+        prefix: pomi-postgres-
+      register: pomi_backup_directory
+
+- name: Gerar o dump no host remoto
+  hosts: lightsail
+  become: true
+  gather_facts: false
+  tasks:
+    - name: Criar arquivo temporário para o dump
+      ansible.builtin.tempfile:
+        state: file
+        suffix: .dump
+      register: pomi_remote_backup
+
+    - name: Gerar dump PostgreSQL do POMI
+      ansible.builtin.shell:
+        cmd: >-
+          docker exec pomi-postgres-test pg_dump -U pomi -d pomi -Fc > {{ pomi_remote_backup.path }}
+      register: pomi_dump_result
+      changed_when: pomi_dump_result.rc == 0
+      failed_when: pomi_dump_result.rc != 0 and not (pomi_force_stop | default(false) | bool)
+
+    - name: Registrar disponibilidade do backup
+      ansible.builtin.set_fact:
+        pomi_backup_created: "{{ pomi_dump_result.rc == 0 }}"
+
+    - name: Buscar o dump para validação local
+      ansible.builtin.fetch:
+        src: "{{ pomi_remote_backup.path }}"
+        dest: "{{ hostvars['localhost'].pomi_backup_directory.path }}/backup.dump"
+        flat: true
+      when: pomi_backup_created | bool
+
+    - name: Remover dump temporário remoto
+      ansible.builtin.file:
+        path: "{{ pomi_remote_backup.path }}"
+        state: absent
+
+- name: Validar e armazenar o backup
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  tasks:
+    - name: Exigir backup ou autorização de parada forçada
+      ansible.builtin.assert:
+        that:
+          - hostvars[groups['lightsail'][0]].pomi_backup_created | bool or (pomi_force_stop | default(false) | bool)
+        fail_msg: O backup falhou; o POMI continuará ligado.
+
+    - name: Validar a estrutura do dump
+      ansible.builtin.command:
+        argv:
+          - docker
+          - run
+          - --rm
+          - --volume
+          - "{{ pomi_backup_directory.path }}:/backup:ro"
+          - postgres:18-alpine
+          - pg_restore
+          - --list
+          - /backup/backup.dump
+      changed_when: false
+      when: hostvars[groups['lightsail'][0]].pomi_backup_created | bool
+
+    - name: Enviar o backup validado ao S3
+      ansible.builtin.command:
+        argv:
+          - aws
+          - s3
+          - cp
+          - "{{ pomi_backup_directory.path }}/backup.dump"
+          - "s3://{{ pomi_stop_outputs.pomi_backup_bucket }}/postgres/{{ lookup('ansible.builtin.pipe', 'date -u +%Y/%m/%d/%H%M%S') }}.dump"
+          - --sse
+          - AES256
+      changed_when: true
+      when: hostvars[groups['lightsail'][0]].pomi_backup_created | bool
+
+- name: Parar o POMI após backup seguro
+  hosts: lightsail
+  become: true
+  gather_facts: false
+  vars:
+    pomi_data_api_hostname: "{{ hostvars['localhost'].pomi_stop_outputs.pomi_data_api_hostname }}"
+    pomi_app_api_hostname: "{{ hostvars['localhost'].pomi_stop_outputs.pomi_app_api_hostname }}"
+    pomi_keycloak_hostname: "{{ hostvars['localhost'].pomi_stop_outputs.pomi_keycloak_hostname }}"
+  roles:
+    - platform
+    - pomi_stop

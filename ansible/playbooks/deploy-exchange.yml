@@ -1,0 +1,237 @@
+---
+- name: Construir e publicar a imagem do Exchange
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars:
+    exchange_image_tag: "{{ lookup('ansible.builtin.pipe', 'date -u +%Y%m%d%H%M%S') }}"
+  tasks:
+    - name: Verificar o backend do Exchange
+      ansible.builtin.stat:
+        path: "{{ exchange_backend_dir }}/Dockerfile"
+      register: exchange_dockerfile
+
+    - name: Exigir o backend do Exchange
+      ansible.builtin.assert:
+        that: exchange_dockerfile.stat.exists
+        fail_msg: "Backend Exchange não encontrado em {{ exchange_backend_dir }}."
+
+    - name: Ler outputs do OpenTofu
+      ansible.builtin.command:
+        argv:
+          - tofu
+          - "-chdir={{ pomi_infra_root }}/terraform"
+          - output
+          - -raw
+          - "{{ item }}"
+      changed_when: false
+      loop:
+        - aws_region
+        - exchange_backend_repository_url
+        - api_hostname
+        - api_url
+        - frontend_url
+        - exchange_jwt_parameter_name
+        - exchange_admin_api_key_parameter_name
+        - exchange_smtp_password_parameter_name
+        - exchange_openobserve_auth_parameter_name
+        - exchange_smtp_host
+        - exchange_smtp_port
+        - exchange_smtp_user
+        - exchange_smtp_from
+        - exchange_openobserve_url
+        - exchange_log_level
+        - exchange_vercel_project_name
+        - exchange_vercel_team_id
+      register: exchange_tofu_outputs
+
+    - name: Consolidar outputs do OpenTofu
+      ansible.builtin.set_fact:
+        exchange_outputs: "{{ dict(exchange_tofu_outputs.results | map(attribute='item') | zip(exchange_tofu_outputs.results | map(attribute='stdout'))) }}"
+
+    - name: Ler segredos do Parameter Store
+      ansible.builtin.command:
+        argv:
+          - aws
+          - ssm
+          - get-parameter
+          - --name
+          - "{{ item }}"
+          - --with-decryption
+          - --query
+          - Parameter.Value
+          - --output
+          - text
+          - --region
+          - "{{ exchange_outputs.aws_region }}"
+      changed_when: false
+      loop:
+        - "{{ exchange_outputs.exchange_jwt_parameter_name }}"
+        - "{{ exchange_outputs.exchange_admin_api_key_parameter_name }}"
+        - "{{ exchange_outputs.exchange_smtp_password_parameter_name }}"
+        - "{{ exchange_outputs.exchange_openobserve_auth_parameter_name }}"
+      register: exchange_parameters
+      no_log: true
+
+    - name: Consolidar segredos do Exchange
+      ansible.builtin.set_fact:
+        exchange_jwt_secret: "{{ exchange_parameters.results[0].stdout }}"
+        exchange_api_key: "{{ exchange_parameters.results[1].stdout }}"
+        exchange_smtp_password: "{{ exchange_parameters.results[2].stdout }}"
+        exchange_openobserve_auth: "{{ exchange_parameters.results[3].stdout }}"
+        exchange_image_ref: "{{ exchange_outputs.exchange_backend_repository_url }}:{{ exchange_image_tag }}"
+        exchange_registry_host: "{{ exchange_outputs.exchange_backend_repository_url.split('/')[0] }}"
+      no_log: true
+
+    - name: Verificar a imagem solicitada para rollback
+      ansible.builtin.command:
+        argv:
+          - aws
+          - ecr
+          - describe-images
+          - --region
+          - "{{ exchange_outputs.aws_region }}"
+          - --repository-name
+          - "{{ exchange_outputs.exchange_backend_repository_url.split('/', 1)[1] }}"
+          - --image-ids
+          - "imageTag={{ exchange_image_tag }}"
+      changed_when: false
+      when: exchange_use_existing_image | bool
+
+    - name: Publicar imagem nova no ECR
+      when: not (exchange_use_existing_image | bool)
+      block:
+        - name: Obter token temporário do ECR
+          ansible.builtin.command:
+            argv:
+              - aws
+              - ecr
+              - get-login-password
+              - --region
+              - "{{ exchange_outputs.aws_region }}"
+          changed_when: false
+          register: exchange_ecr_password
+          no_log: true
+
+        - name: Autenticar Docker local no ECR
+          ansible.builtin.command:
+            argv:
+              - docker
+              - login
+              - --username
+              - AWS
+              - --password-stdin
+              - "{{ exchange_registry_host }}"
+            stdin: "{{ exchange_ecr_password.stdout }}"
+          register: exchange_local_ecr_login
+          no_log: true
+
+        - name: Registrar a sessão local do ECR
+          ansible.builtin.set_fact:
+            exchange_local_registry_login: true
+          when: exchange_local_ecr_login is succeeded
+
+        - name: Construir imagem do Exchange
+          ansible.builtin.command:
+            argv:
+              - docker
+              - build
+              - --file
+              - "{{ exchange_backend_dir }}/Dockerfile"
+              - --tag
+              - "{{ exchange_image_ref }}"
+              - "{{ exchange_backend_dir }}"
+          changed_when: true
+
+        - name: Enviar imagem ao ECR
+          ansible.builtin.command:
+            argv:
+              - docker
+              - push
+              - "{{ exchange_image_ref }}"
+          changed_when: true
+      always:
+        - name: Encerrar sessão local do ECR
+          ansible.builtin.command:
+            argv:
+              - docker
+              - logout
+              - "{{ exchange_registry_host }}"
+          changed_when: false
+          when: exchange_local_registry_login | default(false)
+          no_log: true
+
+    - name: Obter token temporário para a Lightsail
+      ansible.builtin.command:
+        argv:
+          - aws
+          - ecr
+          - get-login-password
+          - --region
+          - "{{ exchange_outputs.aws_region }}"
+      changed_when: false
+      register: exchange_remote_ecr_password
+      no_log: true
+
+- name: Aplicar o Exchange na Lightsail
+  hosts: lightsail
+  become: true
+  gather_facts: false
+  vars:
+    exchange_image_ref: "{{ hostvars['localhost'].exchange_image_ref }}"
+    exchange_registry_host: "{{ hostvars['localhost'].exchange_registry_host }}"
+    exchange_registry_password: "{{ hostvars['localhost'].exchange_remote_ecr_password.stdout }}"
+    exchange_api_hostname: "{{ hostvars['localhost'].exchange_outputs.api_hostname }}"
+    exchange_backend_env: |
+      NODE_ENV=production
+      PORT=3000
+      DATABASE_URL=file:/data/pomi.db
+      FRONTEND_URL={{ hostvars['localhost'].exchange_outputs.frontend_url }}
+      CORS_ORIGIN={{ hostvars['localhost'].exchange_outputs.frontend_url }}
+      API_URL={{ hostvars['localhost'].exchange_outputs.api_url }}
+      SMTP_HOST={{ hostvars['localhost'].exchange_outputs.exchange_smtp_host }}
+      SMTP_PORT={{ hostvars['localhost'].exchange_outputs.exchange_smtp_port }}
+      SMTP_USER={{ hostvars['localhost'].exchange_outputs.exchange_smtp_user }}
+      SMTP_FROM={{ hostvars['localhost'].exchange_outputs.exchange_smtp_from }}
+      OPENOBSERVE_URL={{ hostvars['localhost'].exchange_outputs.exchange_openobserve_url }}
+      LOG_LEVEL={{ hostvars['localhost'].exchange_outputs.exchange_log_level }}
+      DISABLED_AUTH=false
+      secretKey={{ hostvars['localhost'].exchange_jwt_secret }}
+      API_KEY={{ hostvars['localhost'].exchange_api_key }}
+      SMTP_PASS={{ hostvars['localhost'].exchange_smtp_password }}
+      OPENOBSERVE_AUTH={{ hostvars['localhost'].exchange_openobserve_auth }}
+  roles:
+    - platform
+    - exchange
+  post_tasks:
+    - name: Validar o readiness público do Exchange
+      ansible.builtin.uri:
+        url: "{{ hostvars['localhost'].exchange_outputs.api_url }}/ready"
+        status_code: 200
+        return_content: false
+      delegate_to: localhost
+      become: false
+
+    - name: Executar a sincronização inicial opcional
+      ansible.builtin.uri:
+        url: "{{ hostvars['localhost'].exchange_outputs.api_url }}/sync"
+        method: POST
+        headers:
+          x-api-key: "{{ hostvars['localhost'].exchange_api_key }}"
+        status_code: 200
+      delegate_to: localhost
+      become: false
+      when: exchange_run_initial_sync | bool
+      no_log: true
+
+    - name: Enviar notificações iniciais opcionais
+      ansible.builtin.uri:
+        url: "{{ hostvars['localhost'].exchange_outputs.api_url }}/notice-notifications"
+        method: POST
+        headers:
+          x-api-key: "{{ hostvars['localhost'].exchange_api_key }}"
+        status_code: 200
+      delegate_to: localhost
+      become: false
+      when: exchange_run_initial_sync | bool
+      no_log: true

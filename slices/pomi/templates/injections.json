@@ -1,0 +1,159 @@
+{
+    "version": 1,
+    "rootDirectory": "/usr/src/app",
+    "injections": [
+        {
+            "name": "academic-data",
+            "description": "Caderno de horários e dados acadêmicos",
+            "schedule": { "intervalMs": 604800000 },
+            "obtain": {
+                "command": "node",
+                "args": [
+                    "unicamp-scrapper-cli/dist/index.js",
+                    "caderno-horarios",
+                    "--year",
+                    "${POMI_CURRENT_YEAR}",
+                    "--semester",
+                    "${POMI_CURRENT_SEMESTER}",
+                    "--output",
+                    "${POMI_INJECTION_OUTPUT}",
+                    "--cache",
+                    "/usr/src/app/data/rawhtml.db"
+                ],
+                "cwd": "scrapper-aulas",
+                "env": {},
+                "timeoutMs": 3600000
+            },
+            "input": {
+                "directory": "data/injections/academic-data",
+                "fileName": "academic-data.json"
+            },
+            "options": { "databaseConcurrency": 8 }
+        },
+        {
+            "name": "calendar",
+            "description": "Calendário acadêmico",
+            "schedule": { "intervalMs": 86400000 },
+            "obtain": {
+                "command": "node",
+                "args": [
+                    "unicamp-scrapper-cli/dist/index.js",
+                    "calendario",
+                    "--year",
+                    "${POMI_CURRENT_YEAR}",
+                    "--output",
+                    "${POMI_INJECTION_OUTPUT}",
+                    "--cache",
+                    "/usr/src/app/data/rawhtml.db"
+                ],
+                "cwd": "scrapper-aulas",
+                "env": {},
+                "timeoutMs": 1800000
+            },
+            "input": {
+                "directory": "data/injections/calendar",
+                "fileName": "calendario.json"
+            },
+            "options": {
+                "transactionTimeout": 600000,
+                "transactionMaxWait": 60000
+            }
+        },
+        {
+            "name": "catalogs",
+            "description": "Catálogos e currículos",
+            "schedule": { "intervalMs": 2592000000 },
+            "obtain": {
+                "command": "node",
+                "args": [
+                    "unicamp-scrapper-cli/dist/index.js",
+                    "catalogo-curriculos",
+                    "--first-year",
+                    "2021",
+                    "--last-year",
+                    "${POMI_CURRENT_YEAR}",
+                    "--output",
+                    "${POMI_INJECTION_OUTPUT}",
+                    "--cache",
+                    "/usr/src/app/data/rawhtml.db"
+                ],
+                "cwd": "scrapper-aulas",
+                "env": {},
+                "timeoutMs": 7200000
+            },
+            "input": {
+                "directory": "data/injections/catalogs",
+                "fileName": "catalogs.json"
+            },
+            "allowIssues": true,
+            "options": {
+                "transactionTimeout": 600000,
+                "transactionMaxWait": 60000
+            }
+        },
+        {
+            "name": "catalog-disciplines",
+            "description": "Disciplinas dos catálogos",
+            "schedule": { "intervalMs": 2592000000 },
+            "obtain": {
+                "command": "node",
+                "args": [
+                    "unicamp-scrapper-cli/dist/index.js",
+                    "catalogo-disciplinas",
+                    "--first-year",
+                    "2021",
+                    "--last-year",
+                    "${POMI_CURRENT_YEAR}",
+                    "--output",
+                    "${POMI_INJECTION_OUTPUT}",
+                    "--cache",
+                    "/usr/src/app/data/rawhtml.db"
+                ],
+                "cwd": "scrapper-aulas",
+                "env": {},
+                "timeoutMs": 7200000
+            },
+            "input": {
+                "directory": "data/injections/catalog-disciplines",
+                "fileName": "catalog-disciplines.json"
+            },
+            "options": {
+                "unitCode": "DAC",
+                "transactionTimeout": 1800000,
+                "transactionMaxWait": 60000
+            }
+        },
+        {
+            "name": "suggestions",
+            "description": "Sugestões de currículo",
+            "schedule": { "intervalMs": 2592000000 },
+            "obtain": {
+                "command": "node",
+                "args": [
+                    "unicamp-scrapper-cli/dist/index.js",
+                    "sugestao-curriculo",
+                    "--first-year",
+                    "2021",
+                    "--last-year",
+                    "${POMI_CURRENT_YEAR}",
+                    "--output",
+                    "${POMI_INJECTION_OUTPUT}",
+                    "--cache",
+                    "/usr/src/app/data/rawhtml.db"
+                ],
+                "cwd": "scrapper-aulas",
+                "env": {},
+                "timeoutMs": 7200000
+            },
+            "input": {
+                "directory": "data/injections/suggestions",
+                "fileName": "suggestions.json"
+            },
+            "options": {
+                "concurrency": 4,
+                "transactionTimeout": 120000,
+                "transactionMaxWait": 60000
+            }
+        }
+    ]
+}

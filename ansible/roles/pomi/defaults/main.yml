@@ -1,0 +1,10 @@
+---
+pomi_compose_source: "{{ pomi_infra_root }}/slices/pomi/compose/compose.yaml"
+pomi_injection_config_source: "{{ pomi_infra_root }}/slices/pomi/templates/injections.json"
+pomi_injection_dockerfile: "{{ pomi_infra_root }}/slices/pomi/docker/Dockerfile.injection"
+pomi_caddy_template_source: "{{ pomi_infra_root }}/slices/pomi/templates/online.caddy"
+pomi_postgres_image: postgres:18-alpine
+pomi_keycloak_image: quay.io/keycloak/keycloak:26.7.0@sha256:0f198be292568439d700cdbfb893e69a6009bb43a94a06a945b1d3d506c76b13
+pomi_keycloak_config_source: "{{ pomi_infra_root }}/slices/pomi/keycloak/"
+pomi_keycloak_theme_source: "{{ pomi_infra_root }}/../pomi-keycloak-theme/theme/pomi/"
+pomi_keycloak_only: false

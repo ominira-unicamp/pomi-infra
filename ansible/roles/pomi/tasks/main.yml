@@ -1,0 +1,253 @@
+---
+- name: Validar as entradas do deploy do POMI
+  ansible.builtin.assert:
+    that:
+      - pomi_infra_root is defined
+      - pomi_keycloak_only | bool or pomi_data_image_ref is defined
+      - pomi_keycloak_only | bool or pomi_app_image_ref is defined
+      - pomi_keycloak_only | bool or pomi_migrate_image_ref is defined
+      - pomi_keycloak_only | bool or pomi_injection_image_ref is defined
+      - pomi_keycloak_only | bool or pomi_registry_host is defined
+      - pomi_keycloak_only | bool or pomi_registry_password is defined
+      - pomi_data_api_hostname is defined
+      - pomi_app_api_hostname is defined
+      - pomi_keycloak_hostname is defined
+      - pomi_keycloak_theme_source is directory
+      - pomi_frontend_url is defined
+      - pomi_data_env is defined
+      - pomi_app_env is defined
+      - pomi_postgres_env is defined
+      - pomi_keycloak_env is defined
+      - pomi_keycloak_only | bool or pomi_injection_env is defined
+    fail_msg: O deploy requer imagem, credencial temporária ECR, hostname e os ambientes já renderizados.
+
+- name: Instalar o ambiente da API Data do POMI
+  when: not (pomi_keycloak_only | bool)
+  ansible.builtin.copy:
+    content: "{{ pomi_data_env }}\n"
+    dest: "{{ pomi_root }}/planner-test/data.env"
+    owner: root
+    group: root
+    mode: "0600"
+  no_log: true
+
+- name: Instalar o ambiente da API App do POMI
+  when: not (pomi_keycloak_only | bool)
+  ansible.builtin.copy:
+    content: "{{ pomi_app_env }}\n"
+    dest: "{{ pomi_root }}/planner-test/app.env"
+    owner: root
+    group: root
+    mode: "0600"
+  no_log: true
+
+- name: Instalar o ambiente do PostgreSQL do POMI
+  ansible.builtin.copy:
+    content: "{{ pomi_postgres_env }}\n"
+    dest: "{{ pomi_root }}/planner-test/postgres.env"
+    owner: root
+    group: root
+    mode: "0600"
+  no_log: true
+
+- name: Instalar o ambiente do Keycloak do POMI
+  ansible.builtin.copy:
+    content: "{{ pomi_keycloak_env }}\n"
+    dest: "{{ pomi_root }}/planner-test/keycloak.env"
+    owner: root
+    group: root
+    mode: "0600"
+  no_log: true
+
+- name: Instalar o ambiente da injection do POMI
+  when: not (pomi_keycloak_only | bool)
+  ansible.builtin.copy:
+    content: "{{ pomi_injection_env }}\n"
+    dest: "{{ pomi_root }}/planner-test/injection.env"
+    owner: root
+    group: root
+    mode: "0600"
+  no_log: true
+
+- name: Instalar a configuração das injections do POMI
+  when: not (pomi_keycloak_only | bool)
+  block:
+    - name: Criar diretório da configuração das injections
+      ansible.builtin.file:
+        path: "{{ pomi_root }}/injection"
+        state: directory
+        owner: root
+        group: root
+        mode: "0750"
+
+    - name: Copiar configuração das injections
+      ansible.builtin.copy:
+        src: "{{ pomi_injection_config_source }}"
+        dest: "{{ pomi_root }}/injection/injections.json"
+        owner: root
+        group: root
+        mode: "0644"
+  notify: Reconciliar Caddy
+
+- name: Criar diretório persistente das injections
+  when: not (pomi_keycloak_only | bool)
+  ansible.builtin.file:
+    path: "{{ pomi_root }}/injection-data"
+    state: directory
+    owner: root
+    group: root
+    mode: "0750"
+
+- name: Instalar a configuração declarativa do Keycloak
+  ansible.builtin.copy:
+    src: "{{ pomi_keycloak_config_source }}"
+    dest: "{{ pomi_root }}/keycloak-config/"
+    owner: root
+    group: root
+    mode: preserve
+
+- name: Criar diretório do tema do Keycloak
+  ansible.builtin.file:
+    path: "{{ pomi_root }}/keycloak-theme/pomi"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Instalar o tema do Keycloak
+  ansible.builtin.copy:
+    src: "{{ pomi_keycloak_theme_source }}"
+    dest: "{{ pomi_root }}/keycloak-theme/pomi/"
+    owner: root
+    group: root
+    mode: preserve
+
+- name: Permitir o frontend publicado no cliente Keycloak
+  ansible.builtin.replace:
+    path: "{{ pomi_root }}/keycloak-config/pomi-frontend.json"
+    regexp: '"redirectUris": \[[^]]*\]'
+    replace: '"redirectUris": ["{{ pomi_frontend_url }}/*", "http://localhost:5174/*"]'
+
+- name: Permitir a origem do frontend publicado no cliente Keycloak
+  ansible.builtin.replace:
+    path: "{{ pomi_root }}/keycloak-config/pomi-frontend.json"
+    regexp: '"webOrigins": \[[^]]*\]'
+    replace: '"webOrigins": ["{{ pomi_frontend_url }}", "http://localhost:5174"]'
+
+- name: Configurar a URL raiz do frontend no cliente Keycloak
+  ansible.builtin.replace:
+    path: "{{ pomi_root }}/keycloak-config/pomi-frontend.json"
+    regexp: '"rootUrl": "[^"]*"'
+    replace: '"rootUrl": "{{ pomi_frontend_url }}"'
+
+- name: Configurar a URL de retorno do frontend no cliente Keycloak
+  ansible.builtin.replace:
+    path: "{{ pomi_root }}/keycloak-config/pomi-frontend.json"
+    regexp: '"baseUrl": "[^"]*"'
+    replace: '"baseUrl": "{{ pomi_frontend_url }}"'
+
+- name: Instalar o virtual host do POMI
+  ansible.builtin.copy:
+    content: |
+      {{ pomi_data_api_hostname }} {
+          encode zstd gzip
+          reverse_proxy pomi-data-api-test:3000
+      }
+
+      {{ pomi_app_api_hostname }} {
+          encode zstd gzip
+          reverse_proxy pomi-app-api-test:3001
+      }
+
+      {{ pomi_keycloak_hostname }} {
+          encode zstd gzip
+          reverse_proxy pomi-keycloak-test:8080
+      }
+    dest: "{{ pomi_caddy_site_dir }}/pomi.caddy"
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Reconciliar Caddy
+
+- name: Instalar a composição do POMI
+  ansible.builtin.copy:
+    src: "{{ pomi_compose_source }}"
+    dest: "{{ pomi_compose_dir }}/pomi.yaml"
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Remover os contêineres legados do POMI
+  ansible.builtin.include_tasks: legacy-container.yml
+  loop:
+    - pomi-postgres-test
+    - pomi-api-test
+    - pomi-data-api-test
+    - pomi-app-api-test
+    - pomi-migrate-test
+    - pomi-injection-test
+    - pomi-keycloak-test
+  loop_control:
+    loop_var: pomi_legacy_container
+
+- name: Atualizar o POMI com credencial temporária do ECR
+  when: not (pomi_keycloak_only | bool)
+  block:
+    - name: Autenticar temporariamente o Docker no ECR
+      community.docker.docker_login:
+        registry_url: "{{ pomi_registry_host }}"
+        username: AWS
+        password: "{{ pomi_registry_password }}"
+        reauthorize: true
+      no_log: true
+
+    - name: Baixar a imagem imutável da API Data do POMI
+      community.docker.docker_image_pull:
+        name: "{{ pomi_data_image_ref }}"
+
+    - name: Baixar a imagem imutável da API App do POMI
+      community.docker.docker_image_pull:
+        name: "{{ pomi_app_image_ref }}"
+
+    - name: Baixar a imagem imutável de migration do POMI
+      community.docker.docker_image_pull:
+        name: "{{ pomi_migrate_image_ref }}"
+
+    - name: Baixar a imagem do PostgreSQL
+      community.docker.docker_image_pull:
+        name: "{{ pomi_postgres_image }}"
+
+    - name: Baixar a imagem do Keycloak
+      community.docker.docker_image_pull:
+        name: "{{ pomi_keycloak_image }}"
+
+    - name: Subir o POMI pelo Compose
+      community.docker.docker_compose_v2:
+        project_src: "{{ pomi_compose_dir }}"
+        files:
+          - pomi.yaml
+        state: present
+        wait: true
+        wait_timeout: 180
+      environment:
+        POMI_DATA_IMAGE: "{{ pomi_data_image_ref }}"
+        POMI_APP_IMAGE: "{{ pomi_app_image_ref }}"
+        POMI_MIGRATE_IMAGE: "{{ pomi_migrate_image_ref }}"
+        POMI_INJECTION_IMAGE: "{{ pomi_injection_image_ref }}"
+        KEYCLOAK_IMAGE: "{{ pomi_keycloak_image }}"
+        COMPOSE_PROFILES: "{{ '' if (pomi_keycloak_only | bool) else 'api' }}"
+  always:
+    - name: Remover a credencial temporária do ECR
+      community.docker.docker_login:
+        registry_url: "{{ pomi_registry_host }}"
+        state: absent
+      no_log: true
+
+- name: Agendar reconciliação do Caddy após publicar o POMI
+  ansible.builtin.command:
+    cmd: /bin/true
+  changed_when: true
+  notify: Reconciliar Caddy
+
+- name: Reconciliar o Caddy antes das validações públicas
+  ansible.builtin.meta: flush_handlers

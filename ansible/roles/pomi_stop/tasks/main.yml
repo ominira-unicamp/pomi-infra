@@ -1,0 +1,56 @@
+---
+- name: Validar as entradas da parada do POMI
+  ansible.builtin.assert:
+    that:
+      - pomi_infra_root is defined
+      - pomi_data_api_hostname is defined
+      - pomi_app_api_hostname is defined
+      - pomi_keycloak_hostname is defined
+
+- name: Instalar a composição do POMI
+  ansible.builtin.copy:
+    src: "{{ pomi_stop_compose_source }}"
+    dest: "{{ pomi_compose_dir }}/pomi.yaml"
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Parar as APIs do POMI
+  ansible.builtin.command:
+    cmd: docker compose --file {{ pomi_compose_dir }}/pomi.yaml stop --timeout 30 data-api app-api
+  changed_when: true
+
+- name: Parar a injection do POMI
+  ansible.builtin.command:
+    cmd: docker compose --file {{ pomi_compose_dir }}/pomi.yaml stop --timeout 60 injection
+  changed_when: true
+
+- name: Parar o Keycloak do POMI
+  ansible.builtin.command:
+    cmd: docker compose --file {{ pomi_compose_dir }}/pomi.yaml stop --timeout 60 keycloak
+  changed_when: true
+
+- name: Parar o PostgreSQL do POMI
+  ansible.builtin.command:
+    cmd: docker compose --file {{ pomi_compose_dir }}/pomi.yaml stop --timeout 60 postgres
+  changed_when: true
+
+- name: Instalar o virtual host offline do POMI
+  ansible.builtin.copy:
+    content: |
+      {{ pomi_data_api_hostname }} {
+          respond "Ambiente de dados do POMI desligado" 503
+      }
+
+      {{ pomi_app_api_hostname }} {
+          respond "Ambiente de teste do POMI desligado" 503
+      }
+
+      {{ pomi_keycloak_hostname }} {
+          respond "Autenticação do ambiente de teste do POMI desligada" 503
+      }
+    dest: "{{ pomi_caddy_site_dir }}/pomi.caddy"
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Reconciliar Caddy

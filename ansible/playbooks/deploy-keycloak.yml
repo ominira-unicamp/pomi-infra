@@ -1,0 +1,136 @@
+---
+- name: Preparar o deploy isolado do Keycloak do POMI
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars:
+    pomi_infra_root: "{{ playbook_dir }}/../.."
+    pomi_keycloak_theme_source: "{{ pomi_infra_root }}/../pomi-keycloak-theme/theme/pomi/"
+  tasks:
+    - name: Verificar o tema do Keycloak
+      ansible.builtin.stat:
+        path: "{{ pomi_keycloak_theme_source }}"
+      register: pomi_keycloak_theme
+
+    - name: Exigir o tema do Keycloak
+      ansible.builtin.assert:
+        that: pomi_keycloak_theme.stat.isdir
+        fail_msg: "Tema do Keycloak não encontrado em {{ pomi_keycloak_theme_source }}."
+
+    - name: Ler os outputs do OpenTofu
+      ansible.builtin.command:
+        argv:
+          - tofu
+          - "-chdir={{ pomi_infra_root }}/terraform"
+          - output
+          - -raw
+          - "{{ item }}"
+      changed_when: false
+      loop:
+        - aws_region
+        - pomi_data_api_hostname
+        - pomi_app_api_hostname
+        - pomi_frontend_url
+        - pomi_keycloak_hostname
+        - pomi_keycloak_url
+        - pomi_keycloak_admin_password_parameter_name
+        - pomi_postgres_password_parameter_name
+        - exchange_smtp_password_parameter_name
+        - exchange_smtp_host
+        - exchange_smtp_port
+        - exchange_smtp_user
+        - exchange_smtp_from
+      register: pomi_keycloak_tofu_outputs
+
+    - name: Consolidar os outputs do OpenTofu
+      ansible.builtin.set_fact:
+        pomi_keycloak_outputs: "{{ dict(pomi_keycloak_tofu_outputs.results | map(attribute='item') | zip(pomi_keycloak_tofu_outputs.results | map(attribute='stdout'))) }}"
+
+    - name: Validar acesso à AWS antes de ler os segredos
+      ansible.builtin.command:
+        argv:
+          - aws
+          - sts
+          - get-caller-identity
+          - --region
+          - "{{ pomi_keycloak_outputs.aws_region }}"
+          - --output
+          - json
+      changed_when: false
+
+    - name: Ler os segredos do Keycloak
+      ansible.builtin.command:
+        argv:
+          - aws
+          - ssm
+          - get-parameter
+          - --name
+          - "{{ item }}"
+          - --with-decryption
+          - --query
+          - Parameter.Value
+          - --output
+          - text
+          - --region
+          - "{{ pomi_keycloak_outputs.aws_region }}"
+      changed_when: false
+      loop:
+        - "{{ pomi_keycloak_outputs.pomi_keycloak_admin_password_parameter_name }}"
+        - "{{ pomi_keycloak_outputs.pomi_postgres_password_parameter_name }}"
+        - "{{ pomi_keycloak_outputs.exchange_smtp_password_parameter_name }}"
+      register: pomi_keycloak_parameters
+      no_log: true
+
+    - name: Consolidar o ambiente do Keycloak
+      ansible.builtin.set_fact:
+        pomi_keycloak_env: |
+          KC_DB=postgres
+          KC_DB_URL=jdbc:postgresql://postgres:5432/pomi
+          KC_DB_SCHEMA=keycloak
+          KC_DB_USERNAME=pomi
+          KC_DB_PASSWORD={{ pomi_keycloak_parameters.results[1].stdout }}
+          KC_DB_POOL_INITIAL_SIZE=1
+          KC_DB_POOL_MIN_SIZE=1
+          KC_DB_POOL_MAX_SIZE=5
+          KC_BOOTSTRAP_ADMIN_USERNAME=admin
+          KC_BOOTSTRAP_ADMIN_PASSWORD={{ pomi_keycloak_parameters.results[0].stdout }}
+          KC_HOSTNAME={{ pomi_keycloak_outputs.pomi_keycloak_url }}
+          KEYCLOAK_SMTP_HOST={{ pomi_keycloak_outputs.exchange_smtp_host }}
+          KEYCLOAK_SMTP_PORT={{ pomi_keycloak_outputs.exchange_smtp_port }}
+          KEYCLOAK_SMTP_USER={{ pomi_keycloak_outputs.exchange_smtp_user }}
+          KEYCLOAK_SMTP_FROM={{ pomi_keycloak_outputs.exchange_smtp_from }}
+          KEYCLOAK_SMTP_PASSWORD={{ pomi_keycloak_parameters.results[2].stdout }}
+          KC_HTTP_ENABLED=true
+          KC_PROXY_HEADERS=xforwarded
+          KC_HEALTH_ENABLED=true
+          KC_METRICS_ENABLED=true
+          JAVA_OPTS_KC_HEAP=-XX:InitialRAMPercentage=20 -XX:MaxRAMPercentage=45
+        pomi_postgres_env: |
+          POSTGRES_DB=pomi
+          POSTGRES_USER=pomi
+          POSTGRES_PASSWORD={{ pomi_keycloak_parameters.results[1].stdout }}
+      no_log: true
+
+- name: Publicar o Keycloak do POMI sem as APIs
+  hosts: lightsail
+  become: true
+  gather_facts: false
+  vars:
+    pomi_data_api_hostname: "{{ hostvars['localhost'].pomi_keycloak_outputs.pomi_data_api_hostname }}"
+    pomi_app_api_hostname: "{{ hostvars['localhost'].pomi_keycloak_outputs.pomi_app_api_hostname }}"
+    pomi_frontend_url: "{{ hostvars['localhost'].pomi_keycloak_outputs.pomi_frontend_url }}"
+    pomi_keycloak_hostname: "{{ hostvars['localhost'].pomi_keycloak_outputs.pomi_keycloak_hostname }}"
+    pomi_keycloak_url: "{{ hostvars['localhost'].pomi_keycloak_outputs.pomi_keycloak_url }}"
+    pomi_keycloak_env: "{{ hostvars['localhost'].pomi_keycloak_env }}"
+    pomi_postgres_env: "{{ hostvars['localhost'].pomi_postgres_env }}"
+  roles:
+    - platform
+    - pomi_keycloak
+  post_tasks:
+    - name: Validar o discovery OIDC do POMI
+      ansible.builtin.uri:
+        url: "{{ pomi_keycloak_url }}/realms/pomi/.well-known/openid-configuration"
+        status_code: 200
+        return_content: false
+      delegate_to: localhost
+      become: false

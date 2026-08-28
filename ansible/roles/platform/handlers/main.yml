@@ -1,0 +1,40 @@
+---
+- name: Descobrir o Caddy legado
+  community.docker.docker_container_info:
+    name: pomi-caddy
+  register: pomi_caddy_info
+  listen: Reconciliar Caddy
+
+- name: Remover o Caddy que não é gerenciado pelo Compose
+  community.docker.docker_container:
+    name: pomi-caddy
+    state: absent
+    force_kill: true
+  when:
+    - pomi_caddy_info.exists
+    - pomi_caddy_info.container.Config.Labels['com.docker.compose.project'] | default('') != 'pomi-platform'
+  listen: Reconciliar Caddy
+
+- name: Validar a configuração do Caddy
+  ansible.builtin.command:
+    cmd: docker compose --file {{ pomi_compose_dir }}/platform.yaml run --rm --no-deps caddy caddy validate --config /etc/caddy/Caddyfile
+  changed_when: false
+  listen: Reconciliar Caddy
+
+- name: Subir o Caddy pelo Compose
+  community.docker.docker_compose_v2:
+    project_src: "{{ pomi_compose_dir }}"
+    files:
+      - platform.yaml
+    services:
+      - caddy
+    state: present
+    wait: true
+    wait_timeout: 60
+  listen: Reconciliar Caddy
+
+- name: Recarregar o Caddy
+  ansible.builtin.command:
+    cmd: docker compose --file {{ pomi_compose_dir }}/platform.yaml exec --no-TTY caddy caddy reload --config /etc/caddy/Caddyfile
+  changed_when: true
+  listen: Reconciliar Caddy

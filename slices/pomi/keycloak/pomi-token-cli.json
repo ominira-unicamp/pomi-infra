@@ -1,0 +1,30 @@
+{
+  "clientId": "pomi-token-cli",
+  "name": "POMI Token CLI",
+  "enabled": true,
+  "protocol": "openid-connect",
+  "publicClient": true,
+  "bearerOnly": false,
+  "standardFlowEnabled": false,
+  "directAccessGrantsEnabled": true,
+  "serviceAccountsEnabled": false,
+  "implicitFlowEnabled": false,
+  "redirectUris": [],
+  "webOrigins": [],
+  "attributes": {
+    "access.token.lifespan": "3600"
+  },
+  "protocolMappers": [
+    {
+      "name": "pomi-api audience",
+      "protocol": "openid-connect",
+      "protocolMapper": "oidc-audience-mapper",
+      "consentRequired": false,
+      "config": {
+        "included.client.audience": "pomi-api",
+        "id.token.claim": "false",
+        "access.token.claim": "true"
+      }
+    }
+  ]
+}

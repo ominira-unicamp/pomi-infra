@@ -1,0 +1,8 @@
+---
+- name: Reconciliar o host compartilhado do POMI
+  hosts: lightsail
+  become: true
+  gather_facts: true
+  roles:
+    - host
+    - platform

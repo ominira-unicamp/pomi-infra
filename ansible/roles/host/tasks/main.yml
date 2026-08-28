@@ -1,0 +1,99 @@
+---
+- name: Instalar dependências do host
+  ansible.builtin.apt:
+    name: "{{ pomi_host_packages }}"
+    state: present
+    update_cache: true
+
+- name: Habilitar Docker
+  ansible.builtin.systemd_service:
+    name: docker
+    enabled: true
+    state: started
+
+- name: Criar diretórios persistentes
+  ansible.builtin.file:
+    path: "{{ item.path }}"
+    state: directory
+    owner: "{{ item.owner }}"
+    group: "{{ item.group }}"
+    mode: "{{ item.mode }}"
+  loop:
+    - path: "{{ pomi_compose_dir }}"
+      owner: root
+      group: root
+      mode: "0750"
+    - path: "{{ pomi_root }}/caddy/sites"
+      owner: root
+      group: root
+      mode: "0750"
+    - path: "{{ pomi_root }}/caddy-data"
+      owner: root
+      group: root
+      mode: "0750"
+    - path: "{{ pomi_root }}/caddy-config"
+      owner: root
+      group: root
+      mode: "0750"
+    - path: "{{ pomi_root }}/exchange"
+      owner: root
+      group: root
+      mode: "0750"
+    - path: "{{ pomi_root }}/data"
+      owner: "1000"
+      group: "1000"
+      mode: "0750"
+    - path: "{{ pomi_root }}/planner-test"
+      owner: root
+      group: root
+      mode: "0750"
+    - path: "{{ pomi_root }}/postgres-data"
+      owner: 70
+      group: 70
+      mode: "0700"
+
+- name: Verificar se o swap existe
+  ansible.builtin.stat:
+    path: "{{ pomi_swapfile_path }}"
+  register: pomi_swapfile
+
+- name: Criar o arquivo de swap
+  ansible.builtin.command:
+    cmd: "fallocate -l {{ pomi_swapfile_size }} {{ pomi_swapfile_path }}"
+  when: not pomi_swapfile.stat.exists
+
+- name: Restringir o arquivo de swap
+  ansible.builtin.file:
+    path: "{{ pomi_swapfile_path }}"
+    owner: root
+    group: root
+    mode: "0600"
+
+- name: Inicializar o arquivo de swap
+  ansible.builtin.command:
+    cmd: "mkswap {{ pomi_swapfile_path }}"
+  when: not pomi_swapfile.stat.exists
+
+- name: Persistir o swap no fstab
+  ansible.builtin.lineinfile:
+    path: /etc/fstab
+    line: "{{ pomi_swapfile_path }} none swap sw 0 0"
+    create: false
+
+- name: Ativar o swap
+  ansible.builtin.command:
+    cmd: "swapon {{ pomi_swapfile_path }}"
+  register: pomi_swapon
+  changed_when: pomi_swapon.rc == 0
+  failed_when: pomi_swapon.rc != 0 and 'Device or resource busy' not in pomi_swapon.stderr
+
+- name: Criar a rede pública compartilhada
+  community.docker.docker_network:
+    name: pomi-edge
+    state: present
+
+- name: Criar a rede interna do POMI
+  community.docker.docker_network:
+    name: pomi-test-internal
+    internal: true
+    state: present

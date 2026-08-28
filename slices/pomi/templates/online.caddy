@@ -1,0 +1,14 @@
+__DATA_API_HOST__ {
+    encode zstd gzip
+    reverse_proxy pomi-data-api-test:3000
+}
+
+__APP_API_HOST__ {
+    encode zstd gzip
+    reverse_proxy pomi-app-api-test:3001
+}
+
+__KEYCLOAK_HOST__ {
+    encode zstd gzip
+    reverse_proxy pomi-keycloak-test:8080
+}

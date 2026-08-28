@@ -1,0 +1,3 @@
+---
+pomi_platform_compose_source: "{{ pomi_infra_root }}/slices/platform/compose/compose.yaml"
+pomi_platform_caddyfile_source: "{{ pomi_infra_root }}/slices/platform/templates/Caddyfile"

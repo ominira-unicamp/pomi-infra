@@ -1,0 +1,11 @@
+__DATA_API_HOST__ {
+    respond "Ambiente de dados do POMI desligado" 503
+}
+
+__APP_API_HOST__ {
+    respond "Ambiente de teste do POMI desligado" 503
+}
+
+__KEYCLOAK_HOST__ {
+    respond "Autenticação do ambiente de teste do POMI desligada" 503
+}
