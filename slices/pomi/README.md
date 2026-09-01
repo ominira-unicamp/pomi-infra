@@ -17,7 +17,7 @@ Data e App, o job único de migrations, a injection agendada e o PostgreSQL. Ele
 mantém limites de memória, health checks, rede interna, acesso das APIs à
 `pomi-edge` e dependência da saúde do banco antes de iniciá-las.
 
-O Keycloak responde em `https://auth.pomi.<IP-ESTATICO>.sslip.io`, compartilha o
+O Keycloak responde no hostname configurado, como `https://auth.ominira.dev`, compartilha o
 PostgreSQL do planner no schema `keycloak` e é configurado pelo job transitório
 `keycloak-config`. O client público aceita a URL configurada do Vercel e
 `http://localhost:5174` para desenvolvimento local. A senha bootstrap do

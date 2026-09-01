@@ -42,6 +42,7 @@ resource "vercel_project" "frontend" {
 
   lifecycle {
     ignore_changes = [
+      environment,
       oidc_token_config,
       protection_bypass_for_automation_secret,
       vercel_authentication,

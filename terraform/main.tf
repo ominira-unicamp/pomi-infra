@@ -53,6 +53,9 @@ module "pomi" {
   frontend_git_repository  = var.pomi_frontend_git_repository
   frontend_root_directory  = var.pomi_frontend_root_directory
   frontend_url             = var.pomi_frontend_url
+  data_api_domain_name     = var.pomi_data_api_domain_name
+  app_api_domain_name      = var.pomi_app_api_domain_name
+  keycloak_domain_name     = var.pomi_keycloak_domain_name
   keycloak_realm           = var.pomi_keycloak_realm
   keycloak_client_id       = var.pomi_keycloak_client_id
   tags                     = local.tags

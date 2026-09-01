@@ -16,11 +16,12 @@ LIGHTSAIL_SSH = ssh -i "$(SSH_KEY_PATH)" -o StrictHostKeyChecking=accept-new -o 
 
 BACKEND_CONFIG ?= backend.hcl
 
-.PHONY: help tf-init tf-migrate-state tf-format tf-validate tf-plan tf-apply ansible-init reconcile-check reconcile deploy-pomi deploy-migrate deploy-data deploy-app deploy-injection deploy-exchange rollback-pomi rollback-data rollback-app rollback-injection rollback-exchange stop-pomi force-stop-pomi status assess-infrastructure import-vercel-pomi-environments import-vercel-exchange-environments remote-bash postgres-tunnel logs-pomi logs-injection logs-exchange logs-platform secrets-pomi secrets-exchange validate-backup token token-local token-production
+.PHONY: help tf-bootstrap-state tf-init tf-migrate-state tf-format tf-validate tf-plan tf-apply ansible-init reconcile-check reconcile deploy-pomi deploy-migrate deploy-data deploy-app deploy-injection deploy-exchange rollback-pomi rollback-data rollback-app rollback-injection rollback-exchange stop-pomi force-stop-pomi status assess-infrastructure import-vercel-pomi-environments import-vercel-exchange-environments remote-bash postgres-tunnel logs-pomi logs-injection logs-exchange logs-platform secrets-pomi secrets-exchange validate-backup token token-local token-production
 
 help:
 	@printf '%s\n' \
 	  'OpenTofu:' \
+	  '  make tf-bootstrap-state  Cria bucket e lock remoto usando o state local atual' \
 	  '  make tf-init             Inicializa providers e backend remoto configurado' \
 	  '  make tf-migrate-state    Migra o state local para o backend remoto' \
 	  '  make tf-format           Verifica a formatação dos arquivos OpenTofu' \
@@ -64,12 +65,21 @@ help:
 	  '                             Define POMI_ACCESS_TOKEN para o Keycloak de produção' \
 	  '  make validate-backup BACKUP=s3://bucket/key.dump'
 
+tf-bootstrap-state:
+	@aws s3api head-bucket --bucket pomi-exchange-terraform-state --region sa-east-1 2>/dev/null || aws s3api create-bucket --bucket pomi-exchange-terraform-state --create-bucket-configuration LocationConstraint=sa-east-1 --region sa-east-1
+	@aws s3api wait bucket-exists --bucket pomi-exchange-terraform-state --region sa-east-1
+	@aws s3api put-public-access-block --bucket pomi-exchange-terraform-state --public-access-block-configuration BlockPublicAcls=true,IgnorePublicAcls=true,BlockPublicPolicy=true,RestrictPublicBuckets=true
+	@aws s3api put-bucket-encryption --bucket pomi-exchange-terraform-state --server-side-encryption-configuration '{"Rules":[{"ApplyServerSideEncryptionByDefault":{"SSEAlgorithm":"AES256"}}]}'
+	@aws s3api put-bucket-versioning --bucket pomi-exchange-terraform-state --versioning-configuration Status=Enabled
+	@aws dynamodb describe-table --table-name pomi-exchange-terraform-locks --region sa-east-1 >/dev/null 2>&1 || aws dynamodb create-table --table-name pomi-exchange-terraform-locks --attribute-definitions AttributeName=LockID,AttributeType=S --key-schema AttributeName=LockID,KeyType=HASH --billing-mode PAY_PER_REQUEST --region sa-east-1 >/dev/null
+	@aws dynamodb wait table-exists --table-name pomi-exchange-terraform-locks --region sa-east-1
+
 tf-init:
-	@test -f "terraform/$(BACKEND_CONFIG)" || { echo "Crie terraform/$(BACKEND_CONFIG) a partir de terraform/backend.hcl.example." >&2; exit 1; }
+	@test -f "terraform/$(BACKEND_CONFIG)" || { echo "Arquivo terraform/$(BACKEND_CONFIG) não encontrado." >&2; exit 1; }
 	@tofu -chdir=terraform init -backend-config="$(BACKEND_CONFIG)"
 
 tf-migrate-state:
-	@test -f "terraform/$(BACKEND_CONFIG)" || { echo "Crie terraform/$(BACKEND_CONFIG) a partir de terraform/backend.hcl.example." >&2; exit 1; }
+	@test -f "terraform/$(BACKEND_CONFIG)" || { echo "Arquivo terraform/$(BACKEND_CONFIG) não encontrado." >&2; exit 1; }
 	@tofu -chdir=terraform init -migrate-state -backend-config="$(BACKEND_CONFIG)"
 
 tf-format:

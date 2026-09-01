@@ -27,21 +27,21 @@ Detalhes de fronteiras e fluxo estão em [docs/architecture.md](docs/architectur
 
 ## State remoto
 
-O state do OpenTofu é mantido no S3. A configuração do backend fica fora do
-Git em `terraform/backend.hcl`; use o modelo versionado:
+O backend S3 e sua tabela DynamoDB de lock são configurados em
+`terraform/backend.hcl`, versionado sem credenciais. Como o OpenTofu precisa
+do bucket antes de poder inicializar o backend, a primeira criação é feita por
+um comando AWS CLI idempotente; o state principal é migrado ao S3 em seguida.
+
+Com as credenciais AWS que podem criar e administrar S3 e DynamoDB, execute:
 
 ```bash
-cp terraform/backend.hcl.example terraform/backend.hcl
-```
-
-Para migrar o state local existente uma única vez, com as credenciais AWS que
-podem ler e gravar no bucket e na tabela de lock:
-
-```bash
+make tf-bootstrap-state
 make tf-migrate-state
 ```
 
-O comando transfere o state para o backend remoto. Preserve o arquivo local
+O primeiro comando cria o bucket `pomi-exchange-terraform-state`, com acesso
+público bloqueado, criptografia e versionamento, além da tabela de locks. O
+segundo transfere o state principal para o backend remoto. Preserve o arquivo local
 até confirmar `make tf-plan`; ele continua ignorado pelo Git. Os blocos
 `moved` em `terraform/moved.tf` migram endereços antigos para os módulos sem
 recriar recursos.
@@ -63,7 +63,6 @@ substituir ou destruir a Lightsail, o IP estático, DNS ou projeto Vercel.
 
 ```bash
 cp terraform/terraform.tfvars.example terraform/terraform.tfvars
-cp terraform/backend.hcl.example terraform/backend.hcl
 mkdir -p .local
 ssh-keygen -t ed25519 -f .local/pomi-lightsail -C pomi-deploy
 make tf-init
@@ -167,10 +166,13 @@ O script de deploy inicia PostgreSQL 18, aplica migrations do `pomi-backend`,
 inicia o Keycloak, aplica migrations uma vez, publica as APIs Data e App e ativa:
 
 ```text
-https://data.pomi.<IP-ESTATICO>.sslip.io
-https://app.pomi.<IP-ESTATICO>.sslip.io
-https://auth.pomi.<IP-ESTATICO>.sslip.io
+https://data.pomi.ominira.dev
+https://app.pomi.ominira.dev
+https://auth.ominira.dev
 ```
+
+Os registros DNS desses hostnames são gerenciados no Cloudflare e devem apontar
+para o IP estático da Lightsail.
 
 O deploy falha antes do build se houver diretórios vazios em
 `packages/db/prisma/migrations`, pois `prisma migrate deploy` não consegue inicializar o

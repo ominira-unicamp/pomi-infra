@@ -28,6 +28,24 @@ variable "frontend_url" {
   nullable = true
 }
 
+variable "data_api_domain_name" {
+  type     = string
+  default  = null
+  nullable = true
+}
+
+variable "app_api_domain_name" {
+  type     = string
+  default  = null
+  nullable = true
+}
+
+variable "keycloak_domain_name" {
+  type     = string
+  default  = null
+  nullable = true
+}
+
 variable "keycloak_realm" {
   type    = string
   default = "pomi"

@@ -163,6 +163,27 @@ variable "pomi_frontend_url" {
   nullable = true
 }
 
+variable "pomi_data_api_domain_name" {
+  description = "Domínio público da API Data do POMI."
+  type        = string
+  default     = null
+  nullable    = true
+}
+
+variable "pomi_app_api_domain_name" {
+  description = "Domínio público da API App do POMI."
+  type        = string
+  default     = null
+  nullable    = true
+}
+
+variable "pomi_keycloak_domain_name" {
+  description = "Domínio público do Keycloak do POMI."
+  type        = string
+  default     = null
+  nullable    = true
+}
+
 variable "pomi_keycloak_realm" {
   type    = string
   default = "pomi"

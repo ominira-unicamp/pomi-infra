@@ -1,12 +1,21 @@
 locals {
-  name              = "pomi-${var.environment}"
-  data_api_hostname = "data.pomi.${var.static_ip_address}.sslip.io"
-  data_api_url      = "https://${local.data_api_hostname}"
-  app_api_hostname  = "app.pomi.${var.static_ip_address}.sslip.io"
-  app_api_url       = "https://${local.app_api_hostname}"
-  keycloak_hostname = "auth.pomi.${var.static_ip_address}.sslip.io"
-  keycloak_url      = "https://${local.keycloak_hostname}"
-  frontend_url      = coalesce(var.frontend_url, "https://${var.frontend_project_name}.vercel.app")
+  name = "pomi-${var.environment}"
+  data_api_hostname = coalesce(
+    var.data_api_domain_name,
+    "data.pomi.${var.static_ip_address}.sslip.io",
+  )
+  data_api_url = "https://${local.data_api_hostname}"
+  app_api_hostname = coalesce(
+    var.app_api_domain_name,
+    "app.pomi.${var.static_ip_address}.sslip.io",
+  )
+  app_api_url = "https://${local.app_api_hostname}"
+  keycloak_hostname = coalesce(
+    var.keycloak_domain_name,
+    "auth.pomi.${var.static_ip_address}.sslip.io",
+  )
+  keycloak_url = "https://${local.keycloak_hostname}"
+  frontend_url = coalesce(var.frontend_url, "https://${var.frontend_project_name}.vercel.app")
   frontend_environment_variables = {
     VITE_DATA_API_URL = {
       value   = local.data_api_url
@@ -20,17 +29,17 @@ locals {
     }
     VITE_KEYCLOAK_URL = {
       value   = local.keycloak_url
-      target  = ["production", "preview"]
+      target  = ["production", "preview", "development"]
       comment = "URL pública do Keycloak do planejador POMI"
     }
     VITE_KEYCLOAK_REALM = {
       value   = var.keycloak_realm
-      target  = ["production", "preview"]
+      target  = ["production", "preview", "development"]
       comment = "Realm OIDC do planejador POMI"
     }
     VITE_KEYCLOAK_CLIENT_ID = {
       value   = var.keycloak_client_id
-      target  = ["production", "preview"]
+      target  = ["production", "preview", "development"]
       comment = "Client público OIDC do frontend POMI"
     }
   }
@@ -49,6 +58,7 @@ resource "vercel_project" "frontend" {
 
   lifecycle {
     ignore_changes = [
+      environment,
       oidc_token_config,
       protection_bypass_for_automation_secret,
       vercel_authentication,
