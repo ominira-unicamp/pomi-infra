@@ -75,8 +75,14 @@ variable "smtp_port" { type = number }
 variable "smtp_user" { type = string }
 variable "smtp_from" { type = string }
 variable "log_level" { type = string }
-variable "openobserve_url" { type = string }
-variable "openobserve_auth_parameter_name" { type = string }
+
+variable "openobserve_s3_bucket_name" {
+  type = string
+}
+
+variable "openobserve_s3_access_key_parameter_name" { type = string }
+variable "openobserve_s3_secret_key_parameter_name" { type = string }
+variable "openobserve_root_password_parameter_name" { type = string }
 
 variable "registry_image_retention" {
   type = number

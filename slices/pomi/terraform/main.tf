@@ -133,3 +133,84 @@ resource "aws_s3_bucket_lifecycle_configuration" "backups" {
 
   depends_on = [aws_s3_bucket_versioning.backups]
 }
+
+resource "aws_s3_bucket" "openobserve_logs" {
+  bucket = var.openobserve_s3_bucket_name
+  tags = merge(var.tags, { Component = "openobserve-logs" })
+}
+
+resource "aws_s3_bucket_public_access_block" "openobserve_logs" {
+  bucket = aws_s3_bucket.openobserve_logs.id
+  block_public_acls = true
+  block_public_policy = true
+  ignore_public_acls = true
+  restrict_public_buckets = true
+}
+
+resource "aws_s3_bucket_server_side_encryption_configuration" "openobserve_logs" {
+  bucket = aws_s3_bucket.openobserve_logs.id
+  rule {
+    apply_server_side_encryption_by_default {
+      sse_algorithm = "AES256"
+    }
+  }
+}
+
+resource "aws_s3_bucket_lifecycle_configuration" "openobserve_logs" {
+  bucket = aws_s3_bucket.openobserve_logs.id
+  rule {
+    id = "expire-openobserve-logs"
+    status = "Enabled"
+    filter {}
+    expiration { days = 14 }
+    noncurrent_version_expiration { noncurrent_days = 14 }
+  }
+  depends_on = [aws_s3_bucket_versioning.openobserve_logs]
+}
+
+resource "aws_s3_bucket_versioning" "openobserve_logs" {
+  bucket = aws_s3_bucket.openobserve_logs.id
+  versioning_configuration {
+    status = "Enabled"
+  }
+}
+
+resource "aws_iam_user" "openobserve" {
+  name = "${local.name}-openobserve"
+  tags = merge(var.tags, { Component = "openobserve" })
+}
+
+resource "aws_iam_user_policy" "openobserve" {
+  name = "openobserve-logs-bucket"
+  user = aws_iam_user.openobserve.name
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect = "Allow"
+      Action = ["s3:ListBucket", "s3:GetBucketLocation"]
+      Resource = aws_s3_bucket.openobserve_logs.arn
+    }, {
+      Effect = "Allow"
+      Action = ["s3:GetObject", "s3:PutObject", "s3:DeleteObject"]
+      Resource = "${aws_s3_bucket.openobserve_logs.arn}/*"
+    }]
+  })
+}
+
+resource "aws_iam_access_key" "openobserve" {
+  user = aws_iam_user.openobserve.name
+}
+
+resource "aws_ssm_parameter" "openobserve_s3_access_key" {
+  name = var.openobserve_s3_access_key_parameter_name
+  type = "SecureString"
+  value = aws_iam_access_key.openobserve.id
+  overwrite = true
+}
+
+resource "aws_ssm_parameter" "openobserve_s3_secret_key" {
+  name = var.openobserve_s3_secret_key_parameter_name
+  type = "SecureString"
+  value = aws_iam_access_key.openobserve.secret
+  overwrite = true
+}

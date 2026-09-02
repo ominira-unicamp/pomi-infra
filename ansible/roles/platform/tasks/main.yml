@@ -24,5 +24,48 @@
     mode: "0644"
   notify: Reconciliar Caddy
 
+- name: Validar credenciais e destino do OpenObserve
+  ansible.builtin.assert:
+    that:
+      - pomi_openobserve_root_email is defined
+      - pomi_openobserve_root_password is defined
+      - pomi_openobserve_s3_access_key is defined
+      - pomi_openobserve_s3_secret_key is defined
+      - pomi_openobserve_s3_bucket is defined
+    fail_msg: "Defina as credenciais do OpenObserve e do S3 nas variáveis protegidas do deploy."
+  no_log: true
+
+- name: Criar diretórios persistentes de observabilidade
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0750"
+  loop:
+    - "{{ pomi_root }}/openobserve-data"
+    - "{{ pomi_root }}/vector-data"
+    - "{{ pomi_root }}/vector"
+    - "{{ pomi_root }}/secrets"
+
+- name: Instalar configuração do Vector
+  ansible.builtin.copy:
+    src: "{{ pomi_platform_vector_config_source }}"
+    dest: "{{ pomi_root }}/vector/vector.toml"
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Reconciliar Caddy
+
+- name: Renderizar credenciais do OpenObserve
+  ansible.builtin.template:
+    src: "{{ pomi_platform_openobserve_env_source }}"
+    dest: "{{ pomi_root }}/secrets/openobserve.env"
+    owner: root
+    group: root
+    mode: "0600"
+  no_log: true
+  notify: Reconciliar Caddy
+
 - name: Aplicar a plataforma imediatamente na primeira execução
   ansible.builtin.meta: flush_handlers

@@ -70,6 +70,7 @@
       changed_when: false
       loop:
         - aws_region
+        - target_environment
         - pomi_backend_repository_url
         - pomi_injection_repository_url
         - pomi_notifier_repository_url
@@ -83,8 +84,7 @@
         - pomi_data_admin_token_parameter_name
         - pomi_notifier_unsubscribe_secret_parameter_name
         - pomi_smtp_password_parameter_name
-        - pomi_openobserve_auth_parameter_name
-        - pomi_openobserve_url
+        - pomi_openobserve_root_password_parameter_name
         - pomi_log_level
         - pomi_smtp_host
         - pomi_smtp_port
@@ -117,7 +117,7 @@
         - "{{ pomi_outputs.pomi_data_admin_token_parameter_name }}"
         - "{{ pomi_outputs.pomi_notifier_unsubscribe_secret_parameter_name }}"
         - "{{ pomi_outputs.pomi_smtp_password_parameter_name }}"
-        - "{{ pomi_outputs.pomi_openobserve_auth_parameter_name }}"
+        - "{{ pomi_outputs.pomi_openobserve_root_password_parameter_name }}"
       register: pomi_parameters
       no_log: true
 
@@ -129,7 +129,7 @@
         pomi_data_admin_token: "{{ pomi_parameters.results[1].stdout }}"
         pomi_notifier_unsubscribe_secret: "{{ pomi_parameters.results[2].stdout }}"
         pomi_smtp_password: "{{ pomi_parameters.results[3].stdout }}"
-        pomi_openobserve_auth: "{{ pomi_parameters.results[4].stdout }}"
+        pomi_openobserve_root_password: "{{ pomi_parameters.results[4].stdout }}"
         pomi_service_image_ref: "{{ pomi_outputs[pomi_components[pomi_component].image_repository] }}:{{ pomi_image_tag }}-{{ pomi_components[pomi_component].image_suffix }}"
         pomi_migration_image_ref: "{{ pomi_outputs.pomi_backend_repository_url }}:{{ pomi_image_tag }}-{{ 'migrate' if pomi_use_existing_image else 'migration-check' }}"
         pomi_registry_host: "{{ pomi_outputs.pomi_backend_repository_url.split('/')[0] }}"
@@ -141,6 +141,17 @@
           DATABASE_URL=postgresql://pomi:{{ pomi_parameters.results[0].stdout }}@postgres:5432/pomi?schema=public
           CORS_ORIGIN={{ pomi_outputs.pomi_frontend_url }},http://localhost:5174
           POMI_DATA_ADMIN_TOKEN={{ pomi_parameters.results[1].stdout }}
+          OTEL_SERVICE_NAME=pomi-data
+          OTEL_TRACES_EXPORTER=otlp
+          OTEL_METRICS_EXPORTER=otlp
+          OTEL_EXPORTER_OTLP_TRACES_ENDPOINT=http://openobserve:5080/api/default/v1/traces
+          OTEL_EXPORTER_OTLP_METRICS_ENDPOINT=http://openobserve:5080/api/default/v1/metrics
+          OTEL_EXPORTER_OTLP_HEADERS=Authorization=Basic {{ ('admin@pomi.local:' ~ pomi_openobserve_root_password) | b64encode }}
+          OTEL_TRACE_SAMPLE_RATIO=0.1
+          SERVICE_VERSION={{ pomi_image_tag }}
+          DEPLOYMENT_ENVIRONMENT_NAME={{ pomi_outputs.target_environment }}
+          CLOUD_PROVIDER=aws
+          AWS_REGION={{ pomi_outputs.aws_region }}
           {% elif pomi_component == 'app' %}
           NODE_ENV=production
           NODE_OPTIONS=--max-old-space-size=160
@@ -151,6 +162,17 @@
           KEYCLOAK_ISSUER={{ pomi_outputs.pomi_keycloak_url }}/realms/pomi
           KEYCLOAK_AUDIENCE=pomi-api
           NOTIFIER_UNSUBSCRIBE_SECRET={{ pomi_parameters.results[2].stdout }}
+          OTEL_SERVICE_NAME=pomi-app
+          OTEL_TRACES_EXPORTER=otlp
+          OTEL_METRICS_EXPORTER=otlp
+          OTEL_EXPORTER_OTLP_TRACES_ENDPOINT=http://openobserve:5080/api/default/v1/traces
+          OTEL_EXPORTER_OTLP_METRICS_ENDPOINT=http://openobserve:5080/api/default/v1/metrics
+          OTEL_EXPORTER_OTLP_HEADERS=Authorization=Basic {{ ('admin@pomi.local:' ~ pomi_openobserve_root_password) | b64encode }}
+          OTEL_TRACE_SAMPLE_RATIO=0.1
+          SERVICE_VERSION={{ pomi_image_tag }}
+          DEPLOYMENT_ENVIRONMENT_NAME={{ pomi_outputs.target_environment }}
+          CLOUD_PROVIDER=aws
+          AWS_REGION={{ pomi_outputs.aws_region }}
           {% elif pomi_component == 'notifier' %}
           NODE_ENV=production
           NODE_OPTIONS=--max-old-space-size=160
@@ -165,17 +187,11 @@
           SMTP_PASS={{ pomi_parameters.results[3].stdout }}
           SMTP_FROM={{ pomi_outputs.pomi_smtp_from }}
           LOG_LEVEL={{ pomi_outputs.pomi_log_level }}
-          OPENOBSERVE_URL={{ pomi_outputs.pomi_openobserve_url }}
-          OPENOBSERVE_AUTH={{ pomi_parameters.results[4].stdout }}
-          OPENOBSERVE_STREAM=pomi-notifier-logs
           {% else %}
           NODE_ENV=production
           NODE_OPTIONS=--max-old-space-size=448
           DATABASE_URL=postgresql://pomi:{{ pomi_parameters.results[0].stdout }}@postgres:5432/pomi?schema=public
           LOG_LEVEL={{ pomi_outputs.pomi_log_level }}
-          OPENOBSERVE_URL={{ pomi_outputs.pomi_openobserve_url }}
-          OPENOBSERVE_AUTH={{ pomi_parameters.results[4].stdout }}
-          OPENOBSERVE_STREAM=pomi-injection-logs
           {% endif %}
       no_log: true
 
@@ -318,6 +334,29 @@
         group: root
         mode: "0600"
       no_log: true
+
+    - name: Verificar caminho da configuração das injections
+      when: pomi_component == 'injection'
+      ansible.builtin.stat:
+        path: "{{ pomi_root }}/injection/injections.json"
+      register: pomi_injection_config_path
+
+    - name: Remover diretório criado indevidamente para a configuração
+      when:
+        - pomi_component == 'injection'
+        - pomi_injection_config_path.stat.isdir | default(false)
+      ansible.builtin.file:
+        path: "{{ pomi_root }}/injection/injections.json"
+        state: absent
+
+    - name: Instalar configuração das injections
+      when: pomi_component == 'injection'
+      ansible.builtin.copy:
+        src: "{{ pomi_infra_root }}/slices/pomi/templates/injections.json"
+        dest: "{{ pomi_root }}/injection/injections.json"
+        owner: root
+        group: root
+        mode: "0644"
 
     - name: Ler as referências de imagem atualmente ativas
       ansible.builtin.slurp:

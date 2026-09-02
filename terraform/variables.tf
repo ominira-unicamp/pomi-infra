@@ -88,18 +88,23 @@ variable "pomi_log_level" {
   default = "info"
 }
 
-variable "pomi_openobserve_url" {
+variable "pomi_openobserve_s3_bucket_name" {
   type = string
-
-  validation {
-    condition     = startswith(var.pomi_openobserve_url, "https://") && !endswith(var.pomi_openobserve_url, "/")
-    error_message = "pomi_openobserve_url deve usar HTTPS e não pode terminar com barra."
-  }
 }
 
-variable "pomi_openobserve_auth_parameter_name" {
+variable "pomi_openobserve_s3_access_key_parameter_name" {
   type    = string
-  default = "/pomi/openobserve-auth"
+  default = "/pomi/openobserve-s3-access-key"
+}
+
+variable "pomi_openobserve_s3_secret_key_parameter_name" {
+  type    = string
+  default = "/pomi/openobserve-s3-secret-key"
+}
+
+variable "pomi_openobserve_root_password_parameter_name" {
+  type    = string
+  default = "/pomi/openobserve-root-password"
 }
 
 variable "vercel_team_id" {

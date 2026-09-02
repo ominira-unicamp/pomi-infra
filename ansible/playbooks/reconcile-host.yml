@@ -1,4 +1,78 @@
 ---
+- name: Carregar configuração da observabilidade
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars:
+    pomi_infra_root: "{{ playbook_dir }}/../.."
+  tasks:
+    - name: Ler outputs do OpenTofu
+      ansible.builtin.command:
+        argv:
+          - tofu
+          - "-chdir={{ pomi_infra_root }}/terraform"
+          - output
+          - -raw
+          - "{{ item }}"
+      changed_when: false
+      check_mode: false
+      loop:
+        - aws_region
+        - pomi_openobserve_s3_bucket
+        - pomi_openobserve_s3_access_key_parameter_name
+        - pomi_openobserve_s3_secret_key_parameter_name
+        - pomi_openobserve_root_password_parameter_name
+      register: pomi_observability_outputs
+
+    - name: Consolidar outputs da observabilidade
+      ansible.builtin.set_fact:
+        pomi_observability: "{{ dict(pomi_observability_outputs.results | map(attribute='item') | zip(pomi_observability_outputs.results | map(attribute='stdout'))) }}"
+
+    - name: Ler credenciais da observabilidade no Parameter Store
+      ansible.builtin.command:
+        argv:
+          - aws
+          - ssm
+          - get-parameter
+          - --name
+          - "{{ item }}"
+          - --with-decryption
+          - --query
+          - Parameter.Value
+          - --output
+          - text
+          - --region
+          - "{{ pomi_observability.aws_region }}"
+      changed_when: false
+      check_mode: false
+      loop:
+        - "{{ pomi_observability.pomi_openobserve_s3_access_key_parameter_name }}"
+        - "{{ pomi_observability.pomi_openobserve_s3_secret_key_parameter_name }}"
+        - "{{ pomi_observability.pomi_openobserve_root_password_parameter_name }}"
+      register: pomi_observability_parameters
+      no_log: true
+
+    - name: Consolidar variáveis protegidas da observabilidade
+      ansible.builtin.set_fact:
+        pomi_openobserve_s3_access_key: "{{ pomi_observability_parameters.results[0].stdout }}"
+        pomi_openobserve_s3_secret_key: "{{ pomi_observability_parameters.results[1].stdout }}"
+        pomi_openobserve_root_password: "{{ pomi_observability_parameters.results[2].stdout }}"
+        pomi_openobserve_root_email: "admin@pomi.local"
+      no_log: true
+
+    - name: Propagar configuração da observabilidade para os hosts remotos
+      ansible.builtin.set_fact:
+        pomi_aws_region: "{{ pomi_observability.aws_region }}"
+        pomi_openobserve_s3_bucket: "{{ pomi_observability.pomi_openobserve_s3_bucket }}"
+        pomi_openobserve_s3_access_key: "{{ pomi_openobserve_s3_access_key }}"
+        pomi_openobserve_s3_secret_key: "{{ pomi_openobserve_s3_secret_key }}"
+        pomi_openobserve_root_password: "{{ pomi_openobserve_root_password }}"
+        pomi_openobserve_root_email: "{{ pomi_openobserve_root_email }}"
+      delegate_to: "{{ item }}"
+      delegate_facts: true
+      loop: "{{ groups['lightsail'] }}"
+      no_log: true
+
 - name: Reconciliar o host compartilhado do POMI
   hosts: lightsail
   become: true

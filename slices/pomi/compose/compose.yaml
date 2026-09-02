@@ -7,7 +7,7 @@ services:
     restart: unless-stopped
     command:
       - -c
-      - max_connections=20
+      - max_connections=30
       - -c
       - shared_buffers=32MB
       - -c
@@ -133,7 +133,7 @@ services:
         - CMD
         - node
         - -e
-        - fetch("http://127.0.0.1:3000/health").then(response=>process.exit(response.ok?0:1)).catch(()=>process.exit(1))
+        - fetch("http://127.0.0.1:3000/ready").then(response=>process.exit(response.ok?0:1)).catch(()=>process.exit(1))
       interval: 5s
       timeout: 3s
       retries: 36
@@ -161,7 +161,7 @@ services:
         - CMD
         - node
         - -e
-        - fetch("http://127.0.0.1:3001/health").then(response=>process.exit(response.ok?0:1)).catch(()=>process.exit(1))
+        - fetch("http://127.0.0.1:3001/ready").then(response=>process.exit(response.ok?0:1)).catch(()=>process.exit(1))
       interval: 5s
       timeout: 3s
       retries: 36

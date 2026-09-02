@@ -14,6 +14,7 @@ aws_region="${aws_region:-sa-east-1}"
 keycloak_parameter_name="${POMI_KEYCLOAK_ADMIN_PASSWORD_PARAMETER_NAME:-/pomi/planner/test/keycloak-admin-password}"
 data_admin_token_parameter_name="${POMI_DATA_ADMIN_TOKEN_PARAMETER_NAME:-/pomi/planner/test/data-admin-token}"
 notifier_unsubscribe_secret_parameter_name="${POMI_NOTIFIER_UNSUBSCRIBE_SECRET_PARAMETER_NAME:-/pomi/planner/test/notifier-unsubscribe-secret}"
+openobserve_root_password_parameter_name="${POMI_OPENOBSERVE_ROOT_PASSWORD_PARAMETER_NAME:-/pomi/openobserve-root-password}"
 
 ensure_secret() {
   local parameter_name="$1" description="$2" value
@@ -37,3 +38,4 @@ ensure_secret() {
 ensure_secret "$keycloak_parameter_name" "Administrador Keycloak do ambiente de teste do planejador POMI"
 ensure_secret "$data_admin_token_parameter_name" "Token administrativo da API Data do ambiente de teste do POMI"
 ensure_secret "$notifier_unsubscribe_secret_parameter_name" "Segredo de descadastro do notifier do ambiente de teste do POMI"
+ensure_secret "$openobserve_root_password_parameter_name" "Senha administrativa do OpenObserve local"

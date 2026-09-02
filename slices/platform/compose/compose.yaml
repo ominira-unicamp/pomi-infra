@@ -16,7 +16,52 @@ services:
     networks:
       - edge
 
+  openobserve:
+    image: openobserve/openobserve:v0.14.7
+    container_name: pomi-openobserve
+    restart: unless-stopped
+    env_file:
+      - /opt/pomi/secrets/openobserve.env
+    environment:
+      ZO_LOCAL_MODE: "true"
+      ZO_LOCAL_MODE_STORAGE: s3
+      ZO_S3_PROVIDER: aws
+      ZO_DATA_DIR: /data
+      ZO_META_STORE: sqlite
+      ZO_TELEMETRY: "false"
+      ZO_HTTP_PORT: "5080"
+      ZO_MEMORY_CACHE_ENABLED: "false"
+    ports:
+      - "127.0.0.1:5080:5080"
+    volumes:
+      - /opt/pomi/openobserve-data:/data
+    networks:
+      - observability
+      - edge
+
+  vector:
+    image: timberio/vector:0.50.0-alpine
+    container_name: pomi-vector
+    restart: unless-stopped
+    command:
+      - --config
+      - /etc/vector/vector.toml
+    depends_on:
+      - openobserve
+    env_file:
+      - /opt/pomi/secrets/openobserve.env
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - /opt/pomi/vector-data:/var/lib/vector
+      - /opt/pomi/vector/vector.toml:/etc/vector/vector.toml:ro
+    networks:
+      - observability
+
+    mem_limit: 192m
+
 networks:
   edge:
     external: true
     name: pomi-edge
+  observability:
+    name: pomi-observability

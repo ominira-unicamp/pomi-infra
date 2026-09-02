@@ -91,10 +91,12 @@ output "pomi_notifier_unsubscribe_secret_parameter_name" {
 }
 
 output "pomi_smtp_password_parameter_name" { value = module.pomi.smtp_password_parameter_name }
-output "pomi_openobserve_auth_parameter_name" { value = module.pomi.openobserve_auth_parameter_name }
+output "pomi_openobserve_s3_bucket" { value = module.pomi.openobserve_s3_bucket }
+output "pomi_openobserve_s3_access_key_parameter_name" { value = module.pomi.openobserve_s3_access_key_parameter_name }
+output "pomi_openobserve_s3_secret_key_parameter_name" { value = module.pomi.openobserve_s3_secret_key_parameter_name }
+output "pomi_openobserve_root_password_parameter_name" { value = module.pomi.openobserve_root_password_parameter_name }
 output "pomi_smtp_host" { value = module.pomi.smtp_host }
 output "pomi_smtp_port" { value = module.pomi.smtp_port }
 output "pomi_smtp_user" { value = module.pomi.smtp_user }
 output "pomi_smtp_from" { value = module.pomi.smtp_from }
-output "pomi_openobserve_url" { value = module.pomi.openobserve_url }
 output "pomi_log_level" { value = module.pomi.log_level }

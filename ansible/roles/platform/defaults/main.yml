@@ -1,3 +1,6 @@
 ---
 pomi_platform_compose_source: "{{ pomi_infra_root }}/slices/platform/compose/compose.yaml"
 pomi_platform_caddyfile_source: "{{ pomi_infra_root }}/slices/platform/templates/Caddyfile"
+pomi_platform_vector_config_source: "{{ pomi_infra_root }}/slices/platform/templates/vector.toml"
+pomi_platform_openobserve_env_source: "{{ pomi_infra_root }}/slices/platform/templates/openobserve.env.tftpl"
+pomi_openobserve_s3_endpoint: "https://s3.{{ pomi_aws_region }}.amazonaws.com"

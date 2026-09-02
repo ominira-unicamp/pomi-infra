@@ -8,7 +8,7 @@ como configuração futura até seu provisionamento.
 
 | Slice | Possui | Não possui |
 | --- | --- | --- |
-| `platform` | Lightsail, IP, firewall, snapshots, Caddy, redes e Collector | Aplicações e bancos dos produtos |
+| `platform` | Lightsail, IP, firewall, snapshots, Caddy, redes, OpenObserve e Fluent Bit | Aplicações e bancos dos produtos |
 | `pomi` | APIs Data/App, frontend Vercel, Keycloak, imagens ECR, PostgreSQL, backup S3 e segredos | Lightsail e rede compartilhada |
 
 Recursos compartilhados nunca são declarados novamente dentro das slices de

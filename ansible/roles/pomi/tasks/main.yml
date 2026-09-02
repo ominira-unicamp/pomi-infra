@@ -80,6 +80,17 @@
         group: root
         mode: "0750"
 
+    - name: Verificar caminho da configuração das injections
+      ansible.builtin.stat:
+        path: "{{ pomi_root }}/injection/injections.json"
+      register: pomi_injection_config_path
+
+    - name: Remover diretório criado indevidamente para a configuração
+      ansible.builtin.file:
+        path: "{{ pomi_root }}/injection/injections.json"
+        state: absent
+      when: pomi_injection_config_path.stat.isdir | default(false)
+
     - name: Copiar configuração das injections
       ansible.builtin.copy:
         src: "{{ pomi_injection_config_source }}"

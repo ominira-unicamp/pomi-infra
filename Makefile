@@ -7,6 +7,7 @@ POMI_IMAGE_TAG ?=
 POMI_COMPONENT_IMAGE_TAG ?=
 SSH_KEY_PATH ?=.local/pomi-lightsail
 SSH_KNOWN_HOSTS ?=.local/known_hosts
+OBSERVE_LOCAL_PORT ?=5080
 POMI_KEYCLOAK_URL ?=http://localhost:8080
 POMI_KEYCLOAK_REALM ?=pomi
 POMI_TOKEN_CLIENT_ID ?=pomi-token-cli
@@ -21,7 +22,7 @@ define require_target
 	@test "$(TARGET_ENV)" = homolog || { echo 'O ambiente develop ainda não foi provisionado.' >&2; exit 1; }
 endef
 
-.PHONY: help target-check tf-bootstrap-state tf-init-legacy tf-init tf-migrate-state tf-format tf-validate tf-plan tf-apply ansible-init reconcile-check reconcile deploy-pomi deploy-migrate deploy-data deploy-app deploy-injection deploy-notifier rollback-pomi rollback-data rollback-app rollback-injection rollback-notifier stop-pomi force-stop-pomi status assess-infrastructure import-vercel-pomi-environments remote-bash postgres-tunnel logs-pomi logs-injection logs-notifier logs-platform secrets-pomi validate-backup token token-local token-production
+.PHONY: help target-check tf-bootstrap-state tf-init-legacy tf-init tf-migrate-state tf-format tf-validate tf-plan tf-apply ansible-init reconcile-check reconcile deploy-pomi deploy-migrate deploy-data deploy-app deploy-injection deploy-notifier rollback-pomi rollback-data rollback-app rollback-injection rollback-notifier stop-pomi force-stop-pomi status assess-infrastructure import-vercel-pomi-environments remote-bash postgres-tunnel observe-tunnel logs-pomi logs-injection logs-notifier logs-platform secrets-pomi validate-backup token token-local token-production
 
 help:
 	@printf '%s\n' \
@@ -58,6 +59,7 @@ help:
 	  '  make import-vercel-pomi-environments Mostra imports das variáveis Vercel existentes do POMI' \
 	  '  make remote-bash         Abre Bash interativo na Lightsail' \
 	  '  make postgres-tunnel     Abre 127.0.0.1:5433 para o PostgreSQL' \
+	  '  make observe-tunnel      Abre 127.0.0.1:5080 para o OpenObserve' \
 	  '  make logs-pomi           Acompanha logs do Compose do POMI' \
 	  '  make logs-injection      Acompanha logs da injection do POMI' \
 	  '  make logs-notifier       Acompanha logs do notifier do POMI' \
@@ -242,6 +244,20 @@ remote-bash: target-check
 
 postgres-tunnel: target-check
 	@./slices/pomi/scripts/open-db-tunnel.sh
+
+observe-tunnel: target-check
+	@printf 'Túnel aberto: http://127.0.0.1:%s\n' "$(OBSERVE_LOCAL_PORT)"
+	@printf 'Mantenha este terminal aberto; pressione Ctrl+C para encerrar.\n'
+	@ssh -i "$(SSH_KEY_PATH)" \
+	  -o StrictHostKeyChecking=accept-new \
+	  -o UserKnownHostsFile="$(SSH_KNOWN_HOSTS)" \
+	  -o ConnectTimeout=10 \
+	  -o ExitOnForwardFailure=yes \
+	  -o ServerAliveInterval=30 \
+	  -o ServerAliveCountMax=3 \
+	  -N -T \
+	  -L "127.0.0.1:$(OBSERVE_LOCAL_PORT):127.0.0.1:5080" \
+	  "ubuntu@$$(tofu -chdir=terraform output -raw lightsail_static_ip)"
 
 logs-pomi: target-check
 	@$(LIGHTSAIL_SSH) 'sudo docker compose --file /opt/pomi/compose/pomi.yaml logs --follow --tail=$(TAIL)'

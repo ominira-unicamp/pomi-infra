@@ -16,6 +16,7 @@ install -d -m 0750 -o root -g root /opt/pomi/caddy-config
 docker network inspect pomi-edge >/dev/null 2>&1 || docker network create pomi-edge
 docker network inspect pomi-test-internal >/dev/null 2>&1 || docker network create --internal pomi-test-internal
 docker pull caddy:2-alpine
-docker pull otel/opentelemetry-collector-contrib:0.123.0
+docker pull openobserve/openobserve:v0.14.7
+docker pull timberio/vector:0.50.0-alpine
 
 touch /var/lib/pomi-bootstrap-complete

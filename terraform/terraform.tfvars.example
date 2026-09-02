@@ -12,14 +12,16 @@ lightsail_snapshot_time     = "06:00"
 lightsail_ssh_public_key    = "ssh-ed25519 AAAA... pomi-deploy"
 
 pomi_smtp_password_parameter_name    = "/pomi/smtp-password"
-pomi_openobserve_auth_parameter_name = "/pomi/openobserve-auth"
+pomi_openobserve_s3_bucket_name = "pomi-homolog-openobserve-logs"
+pomi_openobserve_s3_access_key_parameter_name = "/pomi/openobserve-s3-access-key"
+pomi_openobserve_s3_secret_key_parameter_name = "/pomi/openobserve-s3-secret-key"
+pomi_openobserve_root_password_parameter_name = "/pomi/openobserve-root-password"
 
 pomi_smtp_host = "smtp.example.org"
 pomi_smtp_port = 587
 pomi_smtp_user = "pomi@example.org"
 pomi_smtp_from = "POMI <pomi@example.org>"
 
-pomi_openobserve_url = "https://api.openobserve.ai/api/minha-organizacao"
 
 vercel_team_id          = "team_xxxxxxxxx"
 pomi_environment                      = "test"

@@ -1,0 +1,39 @@
+data_dir = "/var/lib/vector"
+
+[sources.docker]
+type = "docker_logs"
+docker_host = "unix:///var/run/docker.sock"
+exclude_containers = ["pomi-vector"]
+auto_partial_merge = true
+
+[transforms.normalize]
+type = "remap"
+inputs = ["docker"]
+source = '''
+.environment = "homolog"
+.cloud_provider = "aws"
+.cloud_region = "sa-east-1"
+if is_string(.message) {
+  parsed, err = parse_json(.message)
+  if err == null && is_object(parsed) {
+    . = merge!(., parsed)
+  }
+}
+'''
+
+[sinks.openobserve]
+type = "http"
+inputs = ["normalize"]
+uri = "http://openobserve:5080/api/default/pomi-container-logs/_json"
+method = "post"
+auth.strategy = "basic"
+auth.user = "${ZO_ROOT_USER_EMAIL}"
+auth.password = "${ZO_ROOT_USER_PASSWORD}"
+encoding.codec = "json"
+compression = "gzip"
+batch.max_events = 50
+batch.timeout_secs = 1
+buffer.type = "disk"
+buffer.max_size = 536870912
+buffer.when_full = "block"
+healthcheck.enabled = true
