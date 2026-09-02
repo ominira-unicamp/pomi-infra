@@ -1,4 +1,0 @@
-__API_HOST__ {
-    encode zstd gzip
-    reverse_proxy pomi-exchange-backend:3000
-}

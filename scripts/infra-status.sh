@@ -41,20 +41,17 @@ curl_status() {
 
 aws_region="$(tf_output aws_region)"
 lightsail_ip="$(tf_output lightsail_static_ip)"
-exchange_api_url="$(tf_output api_url)"
 pomi_data_api_url="$(tf_output pomi_data_api_url)"
 pomi_app_api_url="$(tf_output pomi_app_api_url)"
-exchange_repository="$(tf_output exchange_backend_repository_url)"
 pomi_repository="$(tf_output pomi_backend_repository_url)"
 backup_bucket="$(tf_output pomi_backup_bucket)"
 
 section "Endpoints públicos"
-curl_status "$exchange_api_url/ready"
 curl_status "$pomi_data_api_url/public-openapi.json"
 curl_status "$pomi_app_api_url/health"
 
 section "Imagens ECR mais recentes"
-for repository in "$exchange_repository" "$pomi_repository"; do
+for repository in "$pomi_repository" "$(tf_output pomi_injection_repository_url)" "$(tf_output pomi_notifier_repository_url)"; do
   repository_name="${repository#*/}"
   printf '\n%s\n' "$repository"
   aws ecr describe-images \
@@ -81,7 +78,7 @@ ssh \
   "ubuntu@$lightsail_ip" \
   'set -u
    echo "-- Compose --"
-   for definition in platform exchange pomi; do
+   for definition in platform pomi; do
      compose_file="/opt/pomi/compose/$definition.yaml"
      if sudo test -f "$compose_file"; then
        sudo docker compose --file "$compose_file" ps

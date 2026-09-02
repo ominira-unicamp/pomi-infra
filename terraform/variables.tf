@@ -1,5 +1,5 @@
 variable "environment" {
-  description = "Ambiente do POMI Exchange."
+  description = "Ambiente físico legado da plataforma POMI; mantido para preservar o nome da instância."
   type        = string
   default     = "production"
 }
@@ -8,20 +8,6 @@ variable "aws_region" {
   description = "Região AWS da plataforma compartilhada."
   type        = string
   default     = "sa-east-1"
-}
-
-variable "api_domain_name" {
-  description = "Domínio público da API do POMI Exchange."
-  type        = string
-  default     = null
-  nullable    = true
-}
-
-variable "hosted_zone_name" {
-  description = "Zona pública do Route53 usada pelo POMI Exchange."
-  type        = string
-  default     = null
-  nullable    = true
 }
 
 variable "lightsail_availability_zone" {
@@ -58,79 +44,48 @@ variable "ssh_allowed_cidrs" {
   default = ["0.0.0.0/0"]
 }
 
-variable "jwt_parameter_name" {
-  type    = string
-  default = "/pomi/jwt"
-}
-
-variable "admin_api_key_parameter_name" {
-  type    = string
-  default = "/pomi/api-key"
-}
-
-variable "smtp_password_parameter_name" {
+variable "pomi_smtp_password_parameter_name" {
   type    = string
   default = "/pomi/smtp-password"
 }
 
-variable "smtp_host" {
+variable "pomi_smtp_host" {
   type = string
 }
 
-variable "smtp_port" {
+variable "pomi_smtp_port" {
   type    = number
   default = 587
 }
 
-variable "smtp_user" {
+variable "pomi_smtp_user" {
   type = string
 }
 
-variable "smtp_from" {
+variable "pomi_smtp_from" {
   type = string
 }
 
-variable "log_level" {
+variable "pomi_log_level" {
   type    = string
   default = "info"
 }
 
-variable "openobserve_url" {
+variable "pomi_openobserve_url" {
   type = string
 
   validation {
-    condition     = startswith(var.openobserve_url, "https://") && !endswith(var.openobserve_url, "/")
-    error_message = "openobserve_url deve usar HTTPS e não pode terminar com barra."
+    condition     = startswith(var.pomi_openobserve_url, "https://") && !endswith(var.pomi_openobserve_url, "/")
+    error_message = "pomi_openobserve_url deve usar HTTPS e não pode terminar com barra."
   }
 }
 
-variable "openobserve_auth_parameter_name" {
+variable "pomi_openobserve_auth_parameter_name" {
   type    = string
   default = "/pomi/openobserve-auth"
 }
 
 variable "vercel_team_id" {
-  type     = string
-  default  = null
-  nullable = true
-}
-
-variable "vercel_project_name" {
-  type    = string
-  default = "pomi-exchange"
-}
-
-variable "frontend_git_repository" {
-  type = string
-}
-
-variable "frontend_root_directory" {
-  type     = string
-  default  = null
-  nullable = true
-}
-
-variable "frontend_url" {
   type     = string
   default  = null
   nullable = true
@@ -235,6 +190,11 @@ variable "pomi_postgres_password_parameter_name" {
 variable "pomi_data_admin_token_parameter_name" {
   type    = string
   default = "/pomi/planner/test/data-admin-token"
+}
+
+variable "pomi_notifier_unsubscribe_secret_parameter_name" {
+  type    = string
+  default = "/pomi/planner/test/notifier-unsubscribe-secret"
 }
 
 variable "tags" {

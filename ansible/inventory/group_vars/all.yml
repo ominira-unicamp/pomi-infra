@@ -8,8 +8,3 @@ pomi_scrapper_dir: "{{ pomi_infra_root }}/../scrapper-aulas"
 pomi_cors_origin: "http://localhost:5174"
 pomi_use_existing_image: false
 pomi_keycloak_only: false
-exchange_backend_dir: "{{ pomi_infra_root }}/../pomi-exchange/pomi-exchange-backend"
-exchange_frontend_dir: "{{ pomi_infra_root }}/../pomi-exchange/pomi-exchange-frontend"
-exchange_use_existing_image: false
-exchange_run_initial_sync: false
-exchange_deploy_frontend: false

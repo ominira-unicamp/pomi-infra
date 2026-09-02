@@ -1,8 +1,7 @@
 # POMI Infra
 
-Infraestrutura compartilhada do POMI Exchange e do planejador POMI. Uma única
-instância Amazon Lightsail em São Paulo executa a API de produção do Exchange e,
-quando solicitado, a API e o PostgreSQL do ambiente de teste do planejador.
+Infraestrutura do POMI. A instância Amazon Lightsail atual é tratada como o
+ambiente de desenvolvimento; o nome físico legado é mantido para evitar troca.
 
 ## Organização
 
@@ -12,13 +11,11 @@ quando solicitado, a API e o PostgreSQL do ambiente de teste do planejador.
 └── slices/
     ├── platform/            # Lightsail, Caddy, redes, swap e observabilidade
     │   └── compose/         # estado declarativo dos serviços compartilhados
-    ├── pomi-exchange/       # API, Vercel, e-mail e deploy do Exchange
-    │   └── compose/         # API e OpenTelemetry Collector
     └── pomi/                # API, frontend Vercel, PostgreSQL, backup e ciclo start/stop do POMI
         └── compose/         # API e PostgreSQL do ambiente de teste
 ```
 
-As três slices são módulos verticais dentro de um único state. A slice
+As duas slices são módulos verticais dentro de um único state. A slice
 `platform` é a única proprietária da Lightsail, IP estático e firewall. Os
 produtos recebem esses dados por inputs e controlam somente seus próprios
 recursos e fragmentos do Caddy.
@@ -55,8 +52,7 @@ tofu -chdir=terraform plan
 tofu -chdir=terraform apply
 ```
 
-O plano esperado adiciona os repositórios `pomi-exchange-production/backend` e
-`pomi-test/backend`, suas políticas e novos outputs. Não aplique se o plano
+O plano esperado mantém apenas os repositórios do POMI e suas políticas. Não aplique se o plano
 substituir ou destruir a Lightsail, o IP estático, DNS ou projeto Vercel.
 
 ## Configuração local
@@ -77,7 +73,6 @@ State, tfvars, cache, chaves e arquivos `.env` são locais e ignorados. O
 Configure separadamente os segredos dos produtos:
 
 ```bash
-./slices/pomi-exchange/scripts/configure-secrets.sh
 ./slices/pomi/scripts/configure-secrets.sh
 ```
 
@@ -104,7 +99,7 @@ configuração declarativa do realm e dos clientes.
 
 O host usa Docker Compose v2. O bootstrap instala o plugin em instâncias novas
 e os fluxos operacionais o reconciliam em instâncias existentes antes de
-aplicar os projetos `pomi-platform`, `pomi-exchange` e `pomi-test`.
+aplicar os projetos `pomi-platform` e `pomi-test`.
 Alterações posteriores no bootstrap são ignoradas pelo lifecycle da Lightsail
 porque `user_data` força substituição; evolução de hosts existentes deve passar
 pelos scripts idempotentes de preparação.
@@ -114,23 +109,7 @@ AES256, scan no push e retenção das 20 imagens mais recentes por padrão. Alte
 `registry_image_retention` para outro limite, mantendo pelo menos duas versões
 para rollback.
 
-## POMI Exchange
-
-O projeto Vercel permanece conectado ao repositório GitHub informado por
-`frontend_git_repository`, permitindo que o frontend continue integrado à
-Vercel. Essa é a única configuração GitHub mantida na infraestrutura.
-
-Deploy local:
-
-```bash
-export VERCEL_API_TOKEN="..."
-./slices/pomi-exchange/scripts/deploy-local.sh
-```
-
-O script cria uma tag UTC, publica a imagem no ECR e entrega ao Lightsail apenas
-arquivos de configuração. A imagem é baixada diretamente pelo Docker remoto.
-
-## Ambiente de teste do POMI
+## Ambiente de desenvolvimento do POMI
 
 O projeto Vercel do `pomi-frontend` é gerenciado pela slice `pomi`. O OpenTofu
 define `VITE_DATA_API_URL`, `VITE_APP_API_URL`, `VITE_KEYCLOAK_URL`, `VITE_KEYCLOAK_REALM` e
@@ -152,13 +131,7 @@ export VERCEL_API_TOKEN="..."
 make import-vercel-pomi-environments
 ```
 
-Execute cada comando `tofu import` exibido pelo alvo acima. Repita para o
-Exchange, se ele também estiver no mesmo estado:
-
-```bash
-make import-vercel-exchange-environments
-```
-
+Execute cada comando `tofu import` exibido pelo alvo acima.
 Em seguida, confirme o plano com `make tf-plan`. Caso a conta Vercel pertença
 a um time e a API não encontre o projeto, defina também `VERCEL_TEAM_ID`.
 
@@ -206,12 +179,11 @@ USE_EXISTING_IMAGE=true IMAGE_TAG=20260804173651 \
   ./slices/pomi/scripts/deploy-local.sh
 ```
 
-O mesmo contrato de rollback vale para o script do Exchange. O deploy verifica
-se a tag existe no ECR antes de alterar o host.
+O deploy verifica se a tag existe no ECR antes de alterar o host.
 
 ## Reconciliação com Ansible
 
-`ansible/` contém as roles para host, Caddy, POMI e Exchange. Por enquanto, o
+`ansible/` contém as roles para host, Caddy e POMI. Por enquanto, o
 playbook suportado reconcilia somente o host e a plataforma; os scripts locais
 continuam publicando imagens e executando os deploys de produto.
 
@@ -230,7 +202,6 @@ Depois de reconciliar o host, os deploys de API podem usar Ansible:
 ```bash
 cd ansible
 ansible-playbook playbooks/deploy-pomi.yml
-ansible-playbook playbooks/deploy-exchange.yml
 ```
 
 O script de parada cria e valida um `pg_dump`, envia o arquivo ao S3 e somente
@@ -273,7 +244,6 @@ Para inspecionar o estado declarativo no host:
 
 ```bash
 sudo docker compose -f /opt/pomi/compose/platform.yaml ps
-sudo docker compose -f /opt/pomi/compose/exchange.yaml ps
 sudo docker compose -f /opt/pomi/compose/pomi.yaml ps
 ```
 

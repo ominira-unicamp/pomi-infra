@@ -195,6 +195,29 @@ services:
     networks:
       - internal
 
+  notifier:
+    profiles:
+      - api
+    image: ${POMI_NOTIFIER_IMAGE:-pomi-notifier-test:latest}
+    container_name: pomi-notifier-test
+    restart: unless-stopped
+    depends_on:
+      db-migrate:
+        condition: service_completed_successfully
+    env_file:
+      - /opt/pomi/planner-test/notifier.env
+    mem_limit: 192m
+    memswap_limit: 384m
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - kill -0 1
+      interval: 10s
+      timeout: 3s
+      retries: 6
+    networks:
+      - internal
+
 networks:
   edge:
     external: true

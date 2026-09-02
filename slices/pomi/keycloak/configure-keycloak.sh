@@ -36,6 +36,12 @@ if "$kcadm" get "realms/$realm" --config "$config_file" >/dev/null 2>&1; then
     -s duplicateEmailsAllowed=false \
     -s verifyEmail=false \
     -s bruteForceProtected=true \
+    -s rememberMe=true \
+    -s accessTokenLifespan=3600 \
+    -s ssoSessionIdleTimeout=2592000 \
+    -s ssoSessionMaxLifespan=2592000 \
+    -s ssoSessionIdleTimeoutRememberMe=2592000 \
+    -s ssoSessionMaxLifespanRememberMe=2592000 \
     -s loginTheme=pomi \
     -s emailTheme=pomi \
     -s displayName=POMI \
@@ -53,6 +59,12 @@ else
     -s duplicateEmailsAllowed=false \
     -s verifyEmail=false \
     -s bruteForceProtected=true \
+    -s rememberMe=true \
+    -s accessTokenLifespan=3600 \
+    -s ssoSessionIdleTimeout=2592000 \
+    -s ssoSessionMaxLifespan=2592000 \
+    -s ssoSessionIdleTimeoutRememberMe=2592000 \
+    -s ssoSessionMaxLifespanRememberMe=2592000 \
     -s loginTheme=pomi \
     -s emailTheme=pomi \
     -s displayName=POMI \

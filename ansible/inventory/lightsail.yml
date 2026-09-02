@@ -2,6 +2,6 @@ all:
   children:
     lightsail:
       hosts:
-        pomi-production:
+        pomi-dev:
           ansible_host: "{{ lookup('ansible.builtin.env', 'LIGHTSAIL_HOST') }}"
           ansible_user: ubuntu

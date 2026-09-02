@@ -35,7 +35,6 @@
       owner: root
       group: root
       mode: "0750"
-    - path: "{{ pomi_root }}/exchange"
       owner: root
       group: root
       mode: "0750"

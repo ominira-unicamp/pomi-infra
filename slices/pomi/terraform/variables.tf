@@ -69,6 +69,15 @@ variable "backup_retention" {
   type = number
 }
 
+variable "smtp_password_parameter_name" { type = string }
+variable "smtp_host" { type = string }
+variable "smtp_port" { type = number }
+variable "smtp_user" { type = string }
+variable "smtp_from" { type = string }
+variable "log_level" { type = string }
+variable "openobserve_url" { type = string }
+variable "openobserve_auth_parameter_name" { type = string }
+
 variable "registry_image_retention" {
   type = number
 }

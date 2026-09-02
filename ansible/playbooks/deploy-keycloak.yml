@@ -35,11 +35,11 @@
         - pomi_keycloak_url
         - pomi_keycloak_admin_password_parameter_name
         - pomi_postgres_password_parameter_name
-        - exchange_smtp_password_parameter_name
-        - exchange_smtp_host
-        - exchange_smtp_port
-        - exchange_smtp_user
-        - exchange_smtp_from
+        - pomi_smtp_password_parameter_name
+        - pomi_smtp_host
+        - pomi_smtp_port
+        - pomi_smtp_user
+        - pomi_smtp_from
       register: pomi_keycloak_tofu_outputs
 
     - name: Consolidar os outputs do OpenTofu
@@ -77,7 +77,7 @@
       loop:
         - "{{ pomi_keycloak_outputs.pomi_keycloak_admin_password_parameter_name }}"
         - "{{ pomi_keycloak_outputs.pomi_postgres_password_parameter_name }}"
-        - "{{ pomi_keycloak_outputs.exchange_smtp_password_parameter_name }}"
+        - "{{ pomi_keycloak_outputs.pomi_smtp_password_parameter_name }}"
       register: pomi_keycloak_parameters
       no_log: true
 
@@ -95,10 +95,10 @@
           KC_BOOTSTRAP_ADMIN_USERNAME=admin
           KC_BOOTSTRAP_ADMIN_PASSWORD={{ pomi_keycloak_parameters.results[0].stdout }}
           KC_HOSTNAME={{ pomi_keycloak_outputs.pomi_keycloak_url }}
-          KEYCLOAK_SMTP_HOST={{ pomi_keycloak_outputs.exchange_smtp_host }}
-          KEYCLOAK_SMTP_PORT={{ pomi_keycloak_outputs.exchange_smtp_port }}
-          KEYCLOAK_SMTP_USER={{ pomi_keycloak_outputs.exchange_smtp_user }}
-          KEYCLOAK_SMTP_FROM={{ pomi_keycloak_outputs.exchange_smtp_from }}
+          KEYCLOAK_SMTP_HOST={{ pomi_keycloak_outputs.pomi_smtp_host }}
+          KEYCLOAK_SMTP_PORT={{ pomi_keycloak_outputs.pomi_smtp_port }}
+          KEYCLOAK_SMTP_USER={{ pomi_keycloak_outputs.pomi_smtp_user }}
+          KEYCLOAK_SMTP_FROM={{ pomi_keycloak_outputs.pomi_smtp_from }}
           KEYCLOAK_SMTP_PASSWORD={{ pomi_keycloak_parameters.results[2].stdout }}
           KC_HTTP_ENABLED=true
           KC_PROXY_HEADERS=xforwarded

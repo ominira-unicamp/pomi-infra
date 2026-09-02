@@ -30,16 +30,6 @@ variable "ssh_allowed_cidrs" {
   type = list(string)
 }
 
-variable "exchange_api_domain_name" {
-  type     = string
-  nullable = true
-}
-
-variable "exchange_hosted_zone_name" {
-  type     = string
-  nullable = true
-}
-
 variable "tags" {
   type = map(string)
 }

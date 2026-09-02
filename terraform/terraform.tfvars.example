@@ -1,8 +1,7 @@
 aws_region       = "sa-east-1"
 environment      = "production"
-# Sem domínio próprio, omita as duas variáveis para usar <IP>.sslip.io.
-# api_domain_name  = "api.pomi.example.org"
-# hosted_zone_name = "example.org"
+# A instância mantém o identificador físico legado para evitar substituição;
+# semanticamente este ambiente é o dev atual.
 
 lightsail_availability_zone = "sa-east-1a"
 lightsail_blueprint_id      = "ubuntu_24_04"
@@ -10,23 +9,17 @@ lightsail_bundle_id         = "micro_3_1"
 lightsail_snapshot_time     = "06:00"
 lightsail_ssh_public_key    = "ssh-ed25519 AAAA... pomi-deploy"
 
-jwt_parameter_name              = "/pomi/jwt"
-admin_api_key_parameter_name    = "/pomi/api-key"
-smtp_password_parameter_name    = "/pomi/smtp-password"
-openobserve_auth_parameter_name = "/pomi/openobserve-auth"
+pomi_smtp_password_parameter_name    = "/pomi/smtp-password"
+pomi_openobserve_auth_parameter_name = "/pomi/openobserve-auth"
 
-smtp_host = "smtp.example.org"
-smtp_port = 587
-smtp_user = "pomi@example.org"
-smtp_from = "POMI Intercâmbio <pomi@example.org>"
+pomi_smtp_host = "smtp.example.org"
+pomi_smtp_port = 587
+pomi_smtp_user = "pomi@example.org"
+pomi_smtp_from = "POMI <pomi@example.org>"
 
-openobserve_url = "https://api.openobserve.ai/api/minha-organizacao"
+pomi_openobserve_url = "https://api.openobserve.ai/api/minha-organizacao"
 
 vercel_team_id          = "team_xxxxxxxxx"
-vercel_project_name     = "pomi-exchange"
-frontend_git_repository = "ominira-unicamp/pomi-exchange-frontend"
-# frontend_url = "https://pomi.example.org"
-
 pomi_environment                      = "test"
 pomi_frontend_project_name            = "pomi-frontend"
 pomi_frontend_git_repository          = "ominira-unicamp/pomi-frontend"
@@ -40,6 +33,7 @@ pomi_keycloak_client_id               = "pomi-frontend"
 pomi_keycloak_admin_password_parameter_name = "/pomi/planner/test/keycloak-admin-password"
 pomi_postgres_password_parameter_name = "/pomi/planner/test/postgres-password"
 pomi_data_admin_token_parameter_name = "/pomi/planner/test/data-admin-token"
+pomi_notifier_unsubscribe_secret_parameter_name = "/pomi/planner/test/notifier-unsubscribe-secret"
 pomi_backup_retention_days           = 30
 # pomi_backup_bucket_name = "meu-bucket-globalmente-unico"
 

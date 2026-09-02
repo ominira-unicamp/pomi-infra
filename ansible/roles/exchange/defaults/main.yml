@@ -1,3 +1,0 @@
----
-exchange_compose_source: "{{ pomi_infra_root }}/slices/pomi-exchange/compose/compose.yaml"
-exchange_otel_config_source: "{{ pomi_infra_root }}/slices/platform/templates/otel-collector-config.yaml"

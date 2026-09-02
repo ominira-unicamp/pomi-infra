@@ -22,6 +22,10 @@ PostgreSQL do planner no schema `keycloak` e é configurado pelo job transitóri
 `keycloak-config`. O client público aceita a URL configurada do Vercel e
 `http://localhost:5174` para desenvolvimento local. A senha bootstrap do
 administrador e o token administrativo da Data ficam no Parameter Store.
+O access token do frontend vale uma hora. A opção "Lembrar de mim" preserva a
+sessão no navegador por até trinta dias desde o login, inclusive após fechar o
+navegador; o token de acesso é renovado durante essa sessão e não é persistido
+pelo frontend.
 O tema `pomi` é importado do checkout irmão `pomi-keycloak-theme` pelo Ansible
 e montado como somente leitura no contêiner.
 `scripts/configure-secrets.sh` cria os dois parâmetros quando ausentes e não
@@ -46,7 +50,7 @@ baixá-las; nenhuma credencial AWS permanente é armazenada no host.
 
 A injection executa `pomi-injection watch` no container
 `pomi-injection-test`. Seus arquivos de entrada e cache ficam em
-`/opt/pomi/injection-data`. Os logs usam o mesmo OpenObserve do Exchange, mas
+`/opt/pomi/injection-data`. Os logs usam o OpenObserve configurado para o POMI, mas
 com `OPENOBSERVE_STREAM=pomi-injection-logs`.
 
 ## Acesso local ao PostgreSQL

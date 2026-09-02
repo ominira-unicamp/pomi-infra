@@ -2,14 +2,13 @@
 
 ## Estado e composição
 
-`terraform/` é a raiz do único state. Ela instancia três módulos localizados
+`terraform/` é a raiz do único state. Ela instancia dois módulos localizados
 nas slices e publica a interface operacional usada pelos scripts locais.
 
 | Slice | Possui | Não possui |
 | --- | --- | --- |
 | `platform` | Lightsail, IP, firewall, snapshots, Caddy, redes e Collector | Aplicações e bancos dos produtos |
-| `pomi-exchange` | API Exchange, imagem ECR, SQLite, Vercel, Route53, SMTP e seus segredos | Host e recursos do planejador |
-| `pomi` | API de teste, frontend Vercel, Keycloak, imagem ECR, PostgreSQL, backup S3 e seus segredos | Lightsail e produção do Exchange |
+| `pomi` | APIs Data/App, frontend Vercel, Keycloak, imagens ECR, PostgreSQL, backup S3 e segredos | Lightsail e rede compartilhada |
 
 Recursos compartilhados nunca são declarados novamente dentro das slices de
 produto.
@@ -27,12 +26,11 @@ O firewall publica somente SSH, HTTP e HTTPS. Caddy e as duas APIs usam a rede
 O Caddy importa arquivos em `/opt/pomi/caddy/sites`. Cada produto substitui
 somente seu próprio arquivo. A configuração é validada antes de cada reload.
 
-Os serviços são declarados em três projetos Docker Compose independentes:
+Os serviços são declarados em dois projetos Docker Compose independentes:
 
 | Projeto | Arquivo no host | Serviços |
 | --- | --- | --- |
 | `pomi-platform` | `/opt/pomi/compose/platform.yaml` | Caddy |
-| `pomi-exchange` | `/opt/pomi/compose/exchange.yaml` | API Exchange e Collector |
 | `pomi-test` | `/opt/pomi/compose/pomi.yaml` | API POMI e PostgreSQL |
 
 As redes `pomi-edge` e `pomi-test-internal` são externas aos projetos para
@@ -42,7 +40,7 @@ operacionais e a coleta de métricas compatíveis.
 
 ## Persistência
 
-O SQLite do Exchange permanece no caminho legado `/opt/pomi/data`. PostgreSQL 18 usa
+PostgreSQL 18 usa
 `/opt/pomi/postgres-data` montado em `/var/lib/postgresql`, conforme o contrato
 da imagem oficial para a versão 18.
 
@@ -64,8 +62,7 @@ artefato validado seja exatamente o artefato executado.
 
 ## Operação
 
-O Exchange é publicado de forma independente e permanece ativo. O POMI é
-iniciado e parado manualmente. O operador deve serializar mudanças na
+O ambiente atual é o dev do POMI e é iniciado e parado manualmente. O operador deve serializar mudanças na
 Lightsail.
 
 Os scripts locais continuam responsáveis por obter outputs do OpenTofu,

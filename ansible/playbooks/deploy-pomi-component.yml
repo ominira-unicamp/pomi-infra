@@ -6,6 +6,7 @@
   vars:
     pomi_image_tag: "{{ lookup('ansible.builtin.pipe', 'date -u +%Y%m%d%H%M%S') }}"
     pomi_use_existing_image: false
+    pomi_injection_dockerfile: "{{ pomi_infra_root }}/slices/pomi/docker/Dockerfile.injection"
     pomi_components:
       data:
         target: data
@@ -25,13 +26,19 @@
         image_suffix: injection
         service: injection
         env_name: injection
+      notifier:
+        target: notifier
+        image_repository: pomi_notifier_repository_url
+        image_suffix: notifier
+        service: notifier
+        env_name: notifier
     pomi_component: "{{ pomi_component_name }}"
   tasks:
     - name: Validar o componente solicitado
       ansible.builtin.assert:
         that:
           - pomi_component in pomi_components
-        fail_msg: "Componente inválido: {{ pomi_component }}. Use data, app ou injection."
+        fail_msg: "Componente inválido: {{ pomi_component }}. Use data, app, injection ou notifier."
 
     - name: Definir arquivos necessários
       ansible.builtin.set_fact:
@@ -65,16 +72,24 @@
         - aws_region
         - pomi_backend_repository_url
         - pomi_injection_repository_url
+        - pomi_notifier_repository_url
         - pomi_data_api_hostname
         - pomi_app_api_hostname
+        - pomi_app_api_url
         - pomi_keycloak_url
         - pomi_keycloak_hostname
         - pomi_frontend_url
         - pomi_postgres_password_parameter_name
         - pomi_data_admin_token_parameter_name
-        - exchange_openobserve_auth_parameter_name
-        - exchange_openobserve_url
-        - exchange_log_level
+        - pomi_notifier_unsubscribe_secret_parameter_name
+        - pomi_smtp_password_parameter_name
+        - pomi_openobserve_auth_parameter_name
+        - pomi_openobserve_url
+        - pomi_log_level
+        - pomi_smtp_host
+        - pomi_smtp_port
+        - pomi_smtp_user
+        - pomi_smtp_from
       register: pomi_tofu_outputs
 
     - name: Consolidar outputs do OpenTofu
@@ -100,7 +115,9 @@
       loop:
         - "{{ pomi_outputs.pomi_postgres_password_parameter_name }}"
         - "{{ pomi_outputs.pomi_data_admin_token_parameter_name }}"
-        - "{{ pomi_outputs.exchange_openobserve_auth_parameter_name }}"
+        - "{{ pomi_outputs.pomi_notifier_unsubscribe_secret_parameter_name }}"
+        - "{{ pomi_outputs.pomi_smtp_password_parameter_name }}"
+        - "{{ pomi_outputs.pomi_openobserve_auth_parameter_name }}"
       register: pomi_parameters
       no_log: true
 
@@ -110,7 +127,9 @@
         pomi_component_config: "{{ pomi_components[pomi_component] }}"
         pomi_postgres_password: "{{ pomi_parameters.results[0].stdout }}"
         pomi_data_admin_token: "{{ pomi_parameters.results[1].stdout }}"
-        pomi_openobserve_auth: "{{ pomi_parameters.results[2].stdout }}"
+        pomi_notifier_unsubscribe_secret: "{{ pomi_parameters.results[2].stdout }}"
+        pomi_smtp_password: "{{ pomi_parameters.results[3].stdout }}"
+        pomi_openobserve_auth: "{{ pomi_parameters.results[4].stdout }}"
         pomi_service_image_ref: "{{ pomi_outputs[pomi_components[pomi_component].image_repository] }}:{{ pomi_image_tag }}-{{ pomi_components[pomi_component].image_suffix }}"
         pomi_migration_image_ref: "{{ pomi_outputs.pomi_backend_repository_url }}:{{ pomi_image_tag }}-{{ 'migrate' if pomi_use_existing_image else 'migration-check' }}"
         pomi_registry_host: "{{ pomi_outputs.pomi_backend_repository_url.split('/')[0] }}"
@@ -131,13 +150,31 @@
           DISABLED_AUTH=false
           KEYCLOAK_ISSUER={{ pomi_outputs.pomi_keycloak_url }}/realms/pomi
           KEYCLOAK_AUDIENCE=pomi-api
+          NOTIFIER_UNSUBSCRIBE_SECRET={{ pomi_parameters.results[2].stdout }}
+          {% elif pomi_component == 'notifier' %}
+          NODE_ENV=production
+          NODE_OPTIONS=--max-old-space-size=160
+          DATABASE_URL=postgresql://pomi:{{ pomi_parameters.results[0].stdout }}@postgres:5432/pomi?schema=public
+          POMI_APP_API_URL={{ pomi_outputs.pomi_app_api_url }}
+          POMI_FRONTEND_URL={{ pomi_outputs.pomi_frontend_url }}
+          NOTIFIER_UNSUBSCRIBE_SECRET={{ pomi_parameters.results[2].stdout }}
+          NOTIFIER_INTERVAL_MS={{ notifier_interval_ms | default(21600000) }}
+          SMTP_HOST={{ pomi_outputs.pomi_smtp_host }}
+          SMTP_PORT={{ pomi_outputs.pomi_smtp_port }}
+          SMTP_USER={{ pomi_outputs.pomi_smtp_user }}
+          SMTP_PASS={{ pomi_parameters.results[3].stdout }}
+          SMTP_FROM={{ pomi_outputs.pomi_smtp_from }}
+          LOG_LEVEL={{ pomi_outputs.pomi_log_level }}
+          OPENOBSERVE_URL={{ pomi_outputs.pomi_openobserve_url }}
+          OPENOBSERVE_AUTH={{ pomi_parameters.results[4].stdout }}
+          OPENOBSERVE_STREAM=pomi-notifier-logs
           {% else %}
           NODE_ENV=production
           NODE_OPTIONS=--max-old-space-size=448
           DATABASE_URL=postgresql://pomi:{{ pomi_parameters.results[0].stdout }}@postgres:5432/pomi?schema=public
-          LOG_LEVEL={{ pomi_outputs.exchange_log_level }}
-          OPENOBSERVE_URL={{ pomi_outputs.exchange_openobserve_url }}
-          OPENOBSERVE_AUTH={{ pomi_parameters.results[2].stdout }}
+          LOG_LEVEL={{ pomi_outputs.pomi_log_level }}
+          OPENOBSERVE_URL={{ pomi_outputs.pomi_openobserve_url }}
+          OPENOBSERVE_AUTH={{ pomi_parameters.results[4].stdout }}
           OPENOBSERVE_STREAM=pomi-injection-logs
           {% endif %}
       no_log: true
@@ -237,7 +274,7 @@
     pomi_registry_password: "{{ hostvars['localhost'].pomi_ecr_password.stdout }}"
     pomi_image_env_file: "{{ pomi_root }}/planner-test/images.env"
     pomi_env_file: "{{ pomi_root }}/planner-test/{{ hostvars['localhost'].pomi_component_config.env_name }}.env"
-    pomi_image_variable: "POMI_{{ 'DATA' if pomi_component == 'data' else 'APP' if pomi_component == 'app' else 'INJECTION' }}_IMAGE"
+    pomi_image_variable: "POMI_{{ 'DATA' if pomi_component == 'data' else 'APP' if pomi_component == 'app' else 'INJECTION' if pomi_component == 'injection' else 'NOTIFIER' }}_IMAGE"
   tasks:
     - name: Autenticar temporariamente o Docker remoto no ECR
       community.docker.docker_login:
@@ -294,6 +331,7 @@
         pomi_compose_data_image: "{{ pomi_service_image_ref if pomi_component == 'data' else ((pomi_existing_image_env.content | default('') | b64decode) | regex_search('(?m)^POMI_DATA_IMAGE=(.+)$', '\\1') | default('pomi-data-test:latest', true)) }}"
         pomi_compose_app_image: "{{ pomi_service_image_ref if pomi_component == 'app' else ((pomi_existing_image_env.content | default('') | b64decode) | regex_search('(?m)^POMI_APP_IMAGE=(.+)$', '\\1') | default('pomi-app-test:latest', true)) }}"
         pomi_compose_injection_image: "{{ pomi_service_image_ref if pomi_component == 'injection' else ((pomi_existing_image_env.content | default('') | b64decode) | regex_search('(?m)^POMI_INJECTION_IMAGE=(.+)$', '\\1') | default('pomi-injection-test:latest', true)) }}"
+        pomi_compose_notifier_image: "{{ pomi_service_image_ref if pomi_component == 'notifier' else ((pomi_existing_image_env.content | default('') | b64decode) | regex_search('(?m)^POMI_NOTIFIER_IMAGE=(.+)$', '\\1') | default('pomi-notifier-test:latest', true)) }}"
         pomi_compose_migrate_image: "{{ (pomi_existing_image_env.content | default('') | b64decode) | regex_search('(?m)^POMI_MIGRATE_IMAGE=(.+)$', '\\1') | default('pomi-migrate-test:latest', true) }}"
 
     - name: Atualizar a referência persistida da imagem
@@ -305,6 +343,14 @@
         owner: root
         group: root
         mode: "0640"
+
+    - name: Atualizar a composição do POMI
+      ansible.builtin.copy:
+        src: "{{ pomi_infra_root }}/slices/pomi/compose/compose.yaml"
+        dest: "{{ pomi_compose_dir }}/pomi.yaml"
+        owner: root
+        group: root
+        mode: "0644"
 
     - name: Aplicar somente o serviço solicitado
       ansible.builtin.command:
@@ -325,6 +371,7 @@
         POMI_APP_IMAGE: "{{ pomi_compose_app_image }}"
         POMI_MIGRATE_IMAGE: "{{ pomi_compose_migrate_image }}"
         POMI_INJECTION_IMAGE: "{{ pomi_compose_injection_image }}"
+        POMI_NOTIFIER_IMAGE: "{{ pomi_compose_notifier_image }}"
       changed_when: true
     - name: Remover a credencial temporária do ECR remoto
       community.docker.docker_login:

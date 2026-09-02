@@ -26,13 +26,6 @@ resource "aws_lightsail_instance" "backend" {
       error_message = "lightsail_availability_zone deve pertencer a aws_region."
     }
 
-    precondition {
-      condition = (
-        (try(trimspace(var.exchange_api_domain_name), "") == "") ==
-        (try(trimspace(var.exchange_hosted_zone_name), "") == "")
-      )
-      error_message = "api_domain_name e hosted_zone_name devem ser informados juntos ou ambos omitidos."
-    }
   }
 
   tags = var.tags
@@ -80,7 +73,7 @@ resource "aws_lightsail_static_ip_attachment" "backend" {
 
 resource "aws_resourcegroups_group" "pomi" {
   name        = "${var.name}-resources"
-  description = "Recursos AWS do POMI Exchange"
+  description = "Recursos AWS da plataforma POMI"
 
   resource_query {
     query = jsonencode({
@@ -88,7 +81,7 @@ resource "aws_resourcegroups_group" "pomi" {
       TagFilters = [
         {
           Key    = "Application"
-          Values = ["pomi-exchange"]
+          Values = ["pomi"]
         }
       ]
     })

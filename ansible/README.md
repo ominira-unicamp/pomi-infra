@@ -18,7 +18,9 @@ ansible-playbook playbooks/reconcile-host.yml --check --diff
 ansible-playbook playbooks/reconcile-host.yml
 ```
 
-As roles `pomi` e `exchange` já descrevem o estado de cada serviço: arquivos de ambiente, autenticação temporária no ECR, adoção de contêineres legados e Compose. Elas recebem referência imutável de imagem, token ECR de curta duração e conteúdo dos ambientes por variáveis de execução; nenhum segredo deve ser gravado em inventário, `group_vars` ou Git.
+As roles `pomi` e `host` descrevem o estado da plataforma: arquivos de ambiente,
+autenticação temporária no ECR, adoção de contêineres legados e Compose. Nenhum
+segredo deve ser gravado em inventário, `group_vars` ou Git.
 
 ## Deploy de produto
 
@@ -29,7 +31,6 @@ remoção da credencial após a operação.
 
 ```bash
 ansible-playbook playbooks/deploy-pomi.yml
-ansible-playbook playbooks/deploy-exchange.yml
 ```
 
 O POMI também pode ser atualizado por componente:
@@ -54,10 +55,6 @@ ansible-playbook playbooks/deploy-pomi.yml \
   -e pomi_image_tag=20260804201043
 ```
 
-`deploy-exchange.yml` também aceita `exchange_use_existing_image`,
-`exchange_image_tag` e `exchange_run_initial_sync=true`. O deploy opcional do
-frontend Vercel continua no fluxo próprio do frontend; este playbook substitui
-o deploy da API e do Collector.
 
 ## Parada segura do POMI
 

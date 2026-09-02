@@ -11,7 +11,6 @@ sudo install -d -m 0750 -o root -g root /opt/pomi/compose
 sudo install -d -m 0750 -o root -g root /opt/pomi/caddy/sites
 sudo install -d -m 0750 -o root -g root /opt/pomi/caddy-data
 sudo install -d -m 0750 -o root -g root /opt/pomi/caddy-config
-sudo install -d -m 0750 -o root -g root /opt/pomi/exchange
 sudo install -d -m 0750 -o 1000 -g 1000 /opt/pomi/data
 sudo install -d -m 0750 -o root -g root /opt/pomi/planner-test
 sudo install -d -m 0700 -o 70 -g 70 /opt/pomi/postgres-data

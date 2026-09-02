@@ -24,16 +24,6 @@ moved {
 }
 
 moved {
-  from = aws_route53_record.api
-  to   = module.pomi_exchange.aws_route53_record.api
-}
-
-moved {
   from = aws_resourcegroups_group.pomi
   to   = module.platform.aws_resourcegroups_group.pomi
-}
-
-moved {
-  from = vercel_project.frontend
-  to   = module.pomi_exchange.vercel_project.frontend
 }

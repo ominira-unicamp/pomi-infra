@@ -32,16 +32,8 @@ case "$project_name" in
       [VITE_KEYCLOAK_CLIENT_ID]='["production","preview","development"]'
     )
     ;;
-  exchange)
-    project_id="$(tofu -chdir="$terraform_dir" output -raw vercel_project_id)"
-    resource_prefix="module.pomi_exchange.vercel_project_environment_variable.frontend"
-    keys=(VITE_API_URL)
-    declare -A targets=(
-      [VITE_API_URL]='["production","preview","development"]'
-    )
-    ;;
   *)
-    echo "Uso: $0 <pomi|exchange>" >&2
+    echo "Uso: $0 pomi" >&2
     exit 1
     ;;
 esac
