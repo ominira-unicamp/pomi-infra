@@ -1,0 +1,7 @@
+target_environment      = "develop"
+platform_resource_name  = "pomi-develop"
+pomi_environment        = "develop"
+
+# Este arquivo é somente um modelo. O ambiente develop não é criado nesta fase.
+# Ao provisioná-lo, use IP, domínios, projeto Vercel, bucket, repositórios ECR
+# e parâmetros SSM exclusivos sob /pomi/planner/develop/.

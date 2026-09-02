@@ -1,8 +1,7 @@
 locals {
-  platform_name = "pomi-exchange-${var.environment}"
   tags = merge({
     Application = "pomi"
-    Environment = var.environment
+    Environment = var.target_environment
     ManagedBy   = "OpenTofu"
     Platform    = "pomi"
   }, var.tags)
@@ -11,7 +10,7 @@ locals {
 module "platform" {
   source = "../slices/platform/terraform"
 
-  name                        = local.platform_name
+  name                        = var.platform_resource_name
   aws_region                  = var.aws_region
   lightsail_availability_zone = var.lightsail_availability_zone
   lightsail_blueprint_id      = var.lightsail_blueprint_id

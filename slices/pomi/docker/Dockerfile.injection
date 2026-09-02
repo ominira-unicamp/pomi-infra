@@ -52,4 +52,4 @@ COPY --from=scraper-builder /workspace/scrapper-aulas/unicamp-scrapper-cli/dist 
 
 WORKDIR /usr/src/app
 
-CMD ["node", "packages/injection/dist/cli.js", "watch", "--config", "/opt/pomi/injection/injections.json"]
+CMD ["node", "packages/injection/dist/src/cli.js", "watch", "--config", "/opt/pomi/injection/injections.json"]

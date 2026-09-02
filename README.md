@@ -24,8 +24,10 @@ Detalhes de fronteiras e fluxo estão em [docs/architecture.md](docs/architectur
 
 ## State remoto
 
-O backend S3 e sua tabela DynamoDB de lock são configurados em
-`terraform/backend.hcl`, versionado sem credenciais. Como o OpenTofu precisa
+O backend S3 e sua tabela DynamoDB de lock são configurados por ambiente em
+`terraform/backend.homolog.hcl` e `terraform/backend.develop.hcl`, versionados
+sem credenciais. `backend.hcl` é somente a fonte legada para a migração inicial
+do state de homolog. Como o OpenTofu precisa
 do bucket antes de poder inicializar o backend, a primeira criação é feita por
 um comando AWS CLI idempotente; o state principal é migrado ao S3 em seguida.
 
@@ -33,7 +35,9 @@ Com as credenciais AWS que podem criar e administrar S3 e DynamoDB, execute:
 
 ```bash
 make tf-bootstrap-state
-make tf-migrate-state
+make tf-init-legacy
+make tf-migrate-state TARGET_ENV=homolog
+make tf-init TARGET_ENV=homolog
 ```
 
 O primeiro comando cria o bucket `pomi-exchange-terraform-state`, com acesso
@@ -41,7 +45,8 @@ público bloqueado, criptografia e versionamento, além da tabela de locks. O
 segundo transfere o state principal para o backend remoto. Preserve o arquivo local
 até confirmar `make tf-plan`; ele continua ignorado pelo Git. Os blocos
 `moved` em `terraform/moved.tf` migram endereços antigos para os módulos sem
-recriar recursos.
+recriar recursos. A chave `develop/terraform.tfstate` só será inicializada no
+provisionamento futuro do ambiente develop.
 
 Antes do primeiro deploy com registry, aplique a criação dos dois repositórios
 ECR e de suas políticas de retenção:
@@ -61,10 +66,10 @@ substituir ou destruir a Lightsail, o IP estático, DNS ou projeto Vercel.
 cp terraform/terraform.tfvars.example terraform/terraform.tfvars
 mkdir -p .local
 ssh-keygen -t ed25519 -f .local/pomi-lightsail -C pomi-deploy
-make tf-init
+make tf-init TARGET_ENV=homolog
 tofu -chdir=terraform fmt -check -recursive
-tofu -chdir=terraform validate
-tofu -chdir=terraform plan
+make tf-validate TARGET_ENV=homolog
+make tf-plan TARGET_ENV=homolog
 ```
 
 State, tfvars, cache, chaves e arquivos `.env` são locais e ignorados. O

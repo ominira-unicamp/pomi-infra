@@ -1,0 +1,8 @@
+pomi_target_environment: develop
+pomi_root: /opt/pomi
+pomi_compose_dir: "{{ pomi_root }}/compose"
+pomi_runtime_dir: "{{ pomi_root }}/planner-develop"
+pomi_compose_project_name: pomi-develop
+pomi_internal_network_name: pomi-develop-internal
+
+# O host develop será configurado somente no seu provisionamento.

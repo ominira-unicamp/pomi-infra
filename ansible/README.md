@@ -7,7 +7,7 @@ O Ansible reconcilia o host Lightsail sem recriá-lo. Ele é executado no comput
 ```bash
 cd ansible
 ansible-galaxy collection install -r requirements.yml
-export LIGHTSAIL_HOST="$(tofu -chdir=../terraform output -raw lightsail_static_ip)"
+export LIGHTSAIL_HOST="$(tofu -chdir=../terraform output -raw lightsail_static_ip)" # state homolog inicializado
 export ANSIBLE_PRIVATE_KEY_FILE=../.local/pomi-lightsail
 ```
 

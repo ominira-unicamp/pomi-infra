@@ -42,7 +42,7 @@
       owner: "1000"
       group: "1000"
       mode: "0750"
-    - path: "{{ pomi_root }}/planner-test"
+    - path: "{{ pomi_runtime_dir }}"
       owner: root
       group: root
       mode: "0750"
@@ -93,6 +93,6 @@
 
 - name: Criar a rede interna do POMI
   community.docker.docker_network:
-    name: pomi-test-internal
+    name: "{{ pomi_internal_network_name }}"
     internal: true
     state: present

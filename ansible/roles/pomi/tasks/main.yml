@@ -25,7 +25,7 @@
   when: not (pomi_keycloak_only | bool)
   ansible.builtin.copy:
     content: "{{ pomi_data_env }}\n"
-    dest: "{{ pomi_root }}/planner-test/data.env"
+    dest: "{{ pomi_runtime_dir }}/data.env"
     owner: root
     group: root
     mode: "0600"
@@ -35,7 +35,7 @@
   when: not (pomi_keycloak_only | bool)
   ansible.builtin.copy:
     content: "{{ pomi_app_env }}\n"
-    dest: "{{ pomi_root }}/planner-test/app.env"
+    dest: "{{ pomi_runtime_dir }}/app.env"
     owner: root
     group: root
     mode: "0600"
@@ -44,7 +44,7 @@
 - name: Instalar o ambiente do PostgreSQL do POMI
   ansible.builtin.copy:
     content: "{{ pomi_postgres_env }}\n"
-    dest: "{{ pomi_root }}/planner-test/postgres.env"
+    dest: "{{ pomi_runtime_dir }}/postgres.env"
     owner: root
     group: root
     mode: "0600"
@@ -53,7 +53,7 @@
 - name: Instalar o ambiente do Keycloak do POMI
   ansible.builtin.copy:
     content: "{{ pomi_keycloak_env }}\n"
-    dest: "{{ pomi_root }}/planner-test/keycloak.env"
+    dest: "{{ pomi_runtime_dir }}/keycloak.env"
     owner: root
     group: root
     mode: "0600"
@@ -63,7 +63,7 @@
   when: not (pomi_keycloak_only | bool)
   ansible.builtin.copy:
     content: "{{ pomi_injection_env }}\n"
-    dest: "{{ pomi_root }}/planner-test/injection.env"
+    dest: "{{ pomi_runtime_dir }}/injection.env"
     owner: root
     group: root
     mode: "0600"

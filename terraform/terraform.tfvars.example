@@ -1,11 +1,13 @@
 aws_region       = "sa-east-1"
-environment      = "production"
-# A instância mantém o identificador físico legado para evitar substituição;
-# semanticamente este ambiente é o dev atual.
+environment            = "production"
+target_environment     = "homolog"
+platform_resource_name = "pomi-exchange-production"
+# O ambiente lógico atual é homolog; os identificadores físicos legados são
+# preservados para evitar substituição da Lightsail e dos recursos existentes.
 
 lightsail_availability_zone = "sa-east-1a"
 lightsail_blueprint_id      = "ubuntu_24_04"
-lightsail_bundle_id         = "micro_3_1"
+lightsail_bundle_id         = "small_3_1"
 lightsail_snapshot_time     = "06:00"
 lightsail_ssh_public_key    = "ssh-ed25519 AAAA... pomi-deploy"
 

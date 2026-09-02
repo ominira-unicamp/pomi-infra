@@ -19,14 +19,14 @@
     group: root
     mode: "0755"
   loop:
-    - "{{ pomi_root }}/planner-test"
+    - "{{ pomi_runtime_dir }}"
     - "{{ pomi_root }}/keycloak-config"
     - "{{ pomi_root }}/keycloak-theme"
 
 - name: Instalar o ambiente do PostgreSQL do POMI
   ansible.builtin.copy:
     content: "{{ pomi_postgres_env | trim }}\n"
-    dest: "{{ pomi_root }}/planner-test/postgres.env"
+    dest: "{{ pomi_runtime_dir }}/postgres.env"
     owner: root
     group: root
     mode: "0600"
@@ -35,7 +35,7 @@
 - name: Instalar o ambiente do Keycloak do POMI
   ansible.builtin.copy:
     content: "{{ pomi_keycloak_env | trim }}\n"
-    dest: "{{ pomi_root }}/planner-test/keycloak.env"
+    dest: "{{ pomi_runtime_dir }}/keycloak.env"
     owner: root
     group: root
     mode: "0600"

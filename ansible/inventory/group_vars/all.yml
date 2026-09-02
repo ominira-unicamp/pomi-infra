@@ -1,5 +1,9 @@
 pomi_root: /opt/pomi
 pomi_compose_dir: /opt/pomi/compose
+pomi_target_environment: homolog
+pomi_runtime_dir: "{{ pomi_root }}/planner-test"
+pomi_compose_project_name: pomi-test
+pomi_internal_network_name: pomi-test-internal
 pomi_aws_region: sa-east-1
 pomi_caddy_site_dir: /opt/pomi/caddy/sites
 pomi_infra_root: "{{ playbook_dir }}/../.."

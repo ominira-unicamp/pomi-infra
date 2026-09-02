@@ -19,7 +19,7 @@ resource "aws_lightsail_instance" "backend" {
 
   lifecycle {
     prevent_destroy = true
-    ignore_changes  = [user_data]
+    ignore_changes  = [user_data, key_pair_name]
 
     precondition {
       condition     = startswith(var.lightsail_availability_zone, var.aws_region)

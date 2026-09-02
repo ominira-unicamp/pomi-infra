@@ -4,6 +4,23 @@ variable "environment" {
   default     = "production"
 }
 
+variable "target_environment" {
+  description = "Ambiente lógico selecionado para este state."
+  type        = string
+  default     = "homolog"
+
+  validation {
+    condition     = contains(["homolog", "develop"], var.target_environment)
+    error_message = "target_environment deve ser homolog ou develop."
+  }
+}
+
+variable "platform_resource_name" {
+  description = "Nome físico da plataforma Lightsail, separado do ambiente lógico."
+  type        = string
+  default     = "pomi-exchange-production"
+}
+
 variable "aws_region" {
   description = "Região AWS da plataforma compartilhada."
   type        = string

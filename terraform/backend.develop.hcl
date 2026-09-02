@@ -1,6 +1,5 @@
-# Configuração legada usada exclusivamente como origem da migração para homolog.
 bucket         = "pomi-exchange-terraform-state"
-key            = "production/terraform.tfstate"
+key            = "develop/terraform.tfstate"
 region         = "sa-east-1"
 encrypt        = true
 dynamodb_table = "pomi-exchange-terraform-locks"

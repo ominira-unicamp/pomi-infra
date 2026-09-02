@@ -2,8 +2,9 @@
 
 ## Estado e composição
 
-`terraform/` é a raiz do único state. Ela instancia dois módulos localizados
-nas slices e publica a interface operacional usada pelos scripts locais.
+`terraform/` compartilha o código dos módulos, mas usa states separados por
+ambiente. O state atual será migrado para `homolog`; `develop` permanece apenas
+como configuração futura até seu provisionamento.
 
 | Slice | Possui | Não possui |
 | --- | --- | --- |
@@ -62,7 +63,7 @@ artefato validado seja exatamente o artefato executado.
 
 ## Operação
 
-O ambiente atual é o dev do POMI e é iniciado e parado manualmente. O operador deve serializar mudanças na
+O ambiente atual é o homolog do POMI e é iniciado e parado manualmente. O operador deve serializar mudanças na
 Lightsail.
 
 Os scripts locais continuam responsáveis por obter outputs do OpenTofu,

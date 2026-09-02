@@ -2,6 +2,10 @@ output "lightsail_instance_name" {
   value = module.platform.instance_name
 }
 
+output "target_environment" {
+  value = var.target_environment
+}
+
 output "lightsail_static_ip" {
   value = module.platform.static_ip_address
 }

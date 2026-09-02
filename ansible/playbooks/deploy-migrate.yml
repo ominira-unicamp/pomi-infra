@@ -95,7 +95,7 @@
     pomi_migration_image_ref: "{{ hostvars['localhost'].pomi_migration_image_ref }}"
     pomi_registry_host: "{{ hostvars['localhost'].pomi_registry_host }}"
     pomi_registry_password: "{{ hostvars['localhost'].pomi_ecr_password.stdout }}"
-    pomi_image_env_file: "{{ pomi_root }}/planner-test/images.env"
+    pomi_image_env_file: "{{ pomi_runtime_dir }}/images.env"
   tasks:
     - name: Autenticar temporariamente o Docker remoto no ECR
       community.docker.docker_login:
@@ -116,9 +116,9 @@
           - run
           - --rm
           - --network
-          - pomi-test-internal
+          - "{{ pomi_internal_network_name }}"
           - --env-file
-          - "{{ pomi_root }}/planner-test/data.env"
+          - "{{ pomi_runtime_dir }}/data.env"
           - "{{ pomi_migration_image_ref }}"
       changed_when: true
 

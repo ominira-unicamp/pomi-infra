@@ -1,0 +1,7 @@
+target_environment      = "homolog"
+platform_resource_name  = "pomi-exchange-production"
+lightsail_bundle_id     = "small_3_1"
+pomi_environment        = "test"
+
+# Preserve os valores físicos e parâmetros existentes do terraform.tfvars atual.
+# Não altere os sufixos legados nesta fase.
